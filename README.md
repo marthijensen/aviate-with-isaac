@@ -1,10 +1,6 @@
-# ✈️ Aviate with Isaac
+# Aviate with Isaac
 
 Aviate with Isaac is a PHP and Supabase web application designed to help independent flight instructors manage students, lessons, scheduling, training progress, documents, invoicing, and business operations in one centralized platform.
-
-## Project Overview
-
-The goal of Aviate with Isaac is to replace disconnected tools and manual processes with one system where flight instructors can manage both student training and business operations.
 
 ## Tech Stack
 
@@ -17,34 +13,44 @@ The goal of Aviate with Isaac is to replace disconnected tools and manual proces
 - GitHub
 - Trello
 
-## Core Features
+## Documentation
 
-- Dashboard & Business Overview
-- Student Management
-- Scheduling & Calendar Management
-- Lesson Planning
-- Training Progress Tracking
-- Invoicing & Payments
-- Documents & Records
-- Reusable Templates
-- Reports & Analytics
-- User Accounts & Security
+- [Project Setup](docs/setup.md)
+- [Database Design](docs/database.md)
+- [Git Workflow](docs/git-workflow.md)
 
-## Project Management
+## Team Guidelines
 
-The team uses Trello to manage:
+- Do not develop directly on `main`.
+- Use one feature branch per user story.
+- Pull the latest `main` before starting new work.
+- Test changes before opening a Pull Request.
+- Never commit `.env`, passwords, or secret keys.
+- Use Pull Requests for review before merging.
+- Coordinate major Supabase/database changes with the team.
+- A Trello story moves to Done only when its Definition of Done is satisfied.
 
-Backlog → Ready → In Progress → Review → Done
+## Project Status
 
-Each Trello card represents a user story.
+🚀 **Sprint 1 Starting**
 
-## Git Workflow
+The project foundation is complete:
 
-Do not develop directly on `main`.
+- GitHub repository created
+- Supabase project created
+- Environment variable structure configured
+- Product backlog created
+- User stories and Definitions of Done prepared
+- Team development workflow documented
 
-Create a branch for each story:
+### Sprint 1 Focus
 
-```text
-feature/2-1-add-student
-feature/3-1-schedule-lesson
-bugfix/student-validation
+Sprint 1 begins September 24, 2026.
+
+Initial development priorities:
+
+- Initialize the PHP application
+- Finalize the initial Supabase database schema
+- Connect PHP to Supabase
+- Configure authentication
+- Begin development of selected Sprint 1 user stories
