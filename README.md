@@ -13,6 +13,16 @@ Aviate with Isaac is a PHP and Supabase web application designed to help indepen
 - GitHub
 - Trello
 
+## Project Management
+
+The team uses Trello to manage the product backlog, Sprint work, and story progress.
+
+- Trello Board: https://trello.com/b/9O09syee/info-4430-team-1-kanban
+
+Workflow:
+
+Backlog → Ready → In Progress → Review → Done
+
 ## Documentation
 
 - [Project Setup](docs/setup.md)
