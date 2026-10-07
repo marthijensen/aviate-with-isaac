@@ -1,0 +1,112 @@
+:root {
+    --bg: #f4f6f9;
+    --surface: #ffffff;
+    --text: #1d2733;
+    --muted: #5b6b7c;
+    --border: #dde3ea;
+    --accent: #1f4e8c;
+    --error-bg: #fdecec;
+    --error-text: #9b1c1c;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+.site-header {
+    background: var(--accent);
+    color: #fff;
+    padding: 1rem 1.5rem;
+}
+
+.site-header h1 {
+    margin: 0;
+    font-size: 1.4rem;
+}
+
+.site-header p {
+    margin: 0.25rem 0 0;
+    opacity: 0.85;
+}
+
+.dashboard {
+    max-width: 960px;
+    margin: 1.5rem auto;
+    padding: 0 1rem;
+}
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+}
+
+.card h2 {
+    margin-top: 0;
+    font-size: 1.15rem;
+}
+
+.lessons-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.lessons-table th,
+.lessons-table td {
+    text-align: left;
+    padding: 0.6rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.lessons-table th {
+    color: var(--muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.empty-state {
+    color: var(--muted);
+    margin: 0;
+}
+
+.notice-error {
+    background: var(--error-bg);
+    color: var(--error-text);
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin: 0;
+}
+
+@media (max-width: 600px) {
+    .lessons-table thead {
+        display: none;
+    }
+
+    .lessons-table tr {
+        display: block;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .lessons-table td {
+        display: flex;
+        justify-content: space-between;
+        border: 0;
+        padding: 0.2rem 0;
+    }
+
+    .lessons-table td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-weight: 600;
+    }
+}
