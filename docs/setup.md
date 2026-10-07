@@ -39,18 +39,37 @@ The secret key is only used by PHP on the server. Never commit `.env`.
 
 Run the SQL files in `supabase/migrations/` in order, using the Supabase **SQL Editor**.
 
+To add sample students and lessons, first make sure there is at least one user in **Authentication > Users**, then run `supabase/seed.sql` in the SQL Editor.
+
 ## 4. Run the App
 
 PHP 8.1 or newer with the `curl` extension is required.
 
 ```bash
-php -S localhost:8000 -t public
+php -S localhost:8000 -t public public/index.php
 ```
 
-Then open http://localhost:8000.
+Then open http://localhost:8000. It redirects to the dashboard.
 
-## 5. Run Tests
+## 5. Routing
+
+Every request goes through `public/index.php`, the front controller. Routes are defined in `src/routes.php`:
+
+| Method | Path | Page |
+| --- | --- | --- |
+| GET | `/` | Redirects to `/dashboard` |
+| GET | `/dashboard` | Dashboard with upcoming lessons |
+
+Unknown paths show a 404 page. Pages are views in `views/`, rendered inside `views/layout.php`.
+
+On Apache, `public/.htaccess` sends requests to the front controller. Point the web server's document root at `public/`.
+
+## 6. Run Tests
 
 ```bash
 php tests/UpcomingLessonsTest.php
+```
+
+```bash
+php tests/RouterTest.php
 ```

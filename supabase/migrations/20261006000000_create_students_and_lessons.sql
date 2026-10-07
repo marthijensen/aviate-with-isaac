@@ -28,6 +28,10 @@ create table if not exists public.lessons (
 create index if not exists lessons_student_id_idx on public.lessons (student_id);
 create index if not exists lessons_upcoming_idx on public.lessons (status, scheduled_start);
 
+-- Expose the tables to the Supabase Data API. Access is still limited by RLS
+-- below; service_role (the server-side secret key) bypasses RLS.
+grant select, insert, update, delete on public.students, public.lessons to authenticated, service_role;
+
 -- Row Level Security: instructors only see and change their own records.
 alter table public.students enable row level security;
 alter table public.lessons enable row level security;
