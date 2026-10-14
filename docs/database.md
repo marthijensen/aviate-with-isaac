@@ -66,3 +66,38 @@ Application tables should use Supabase Row Level Security so users only access i
 The initial database schema will be finalized as part of Sprint 1.
 
 The team should prioritize the tables required by the first Sprint 1 stories before creating the complete application schema.
+
+## Current Schema
+
+The SQL for each change lives in `supabase/migrations/`.
+
+### students (Story 19)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | Primary key |
+| instructor_id | uuid | References `auth.users`, defaults to the signed-in user |
+| first_name | text | Required |
+| last_name | text | Required |
+| email | text | |
+| phone | text | |
+| status | text | `active` or `inactive` |
+| created_at | timestamptz | |
+
+### lessons (Story 19)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | Primary key |
+| instructor_id | uuid | References `auth.users`, defaults to the signed-in user |
+| student_id | uuid | References `students` |
+| lesson_type | text | `flight` or `ground` |
+| scheduled_start | timestamptz | Required |
+| scheduled_end | timestamptz | Must be after `scheduled_start` |
+| status | text | `scheduled`, `completed`, or `cancelled` |
+| notes | text | |
+| created_at | timestamptz | |
+
+Both tables have Row Level Security enabled. Signed-in instructors can only read and change their own students and lessons.
+
+The dashboard's **Upcoming Lessons** card shows lessons where `status = 'scheduled'` and `scheduled_start` is now or later, sorted soonest first.
