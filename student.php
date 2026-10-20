@@ -4,18 +4,32 @@
 // Later this will come from Supabase using the student ID.
 
 $student = [
-    'id' => 1,
-    'first_name' => 'John',
-    'last_name' => 'Smith',
-    'email' => 'john.smith@email.com',
-    'phone' => '(801) 555-1234',
-    'address' => '123 Main Street',
-    'city' => 'Provo',
-    'state' => 'UT',
-    'zip' => '84601',
-    'training_goal' => 'Private Pilot Certificate',
-    'status' => 'active',
-    'created_at' => '2026-05-10'
+    <?php
+
+require_once __DIR__ . '/supabase.php';
+
+$studentId = $_GET['id'] ?? null;
+
+if (!$studentId || !ctype_digit((string) $studentId)) {
+    http_response_code(400);
+    exit('Invalid student ID.');
+}
+
+$studentId = (int) $studentId;
+
+$results = supabaseRequest(
+    'students'
+    . '?id=eq.'
+    . urlencode($studentId)
+    . '&select=*'
+);
+
+if (empty($results)) {
+    http_response_code(404);
+    exit('Student not found.');
+}
+
+$student = $results[0];
 ];
 
 $recentLessons = [
