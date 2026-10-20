@@ -1,26 +1,194 @@
-.student-summary-card {
-    background: #ffffff;
-    border: 1px solid #dddddd;
-    border-radius: 10px;
-    padding: 20px;
-    max-width: 280px;
+* {
+    box-sizing: border-box;
 }
 
-.student-summary-card h3 {
-    margin-top: 0;
+body {
+    margin: 0;
+    background-color: #f5f5f2;
+    color: #161616;
+    font-family: Arial, Helvetica, sans-serif;
 }
 
-.student-count {
-    font-size: 40px;
-    font-weight: bold;
-    margin: 10px 0;
+
+/* NAVIGATION */
+
+.top-nav {
+    background-color: #ffffff;
+    border-bottom: 1px solid #deded8;
+
+    padding: 28px 60px;
 }
 
-.student-summary-card p {
+.logo {
+    font-size: 17px;
+    font-weight: 700;
+
+    letter-spacing: 2px;
+}
+
+
+/* MAIN PAGE */
+
+.dashboard-container {
+    max-width: 1150px;
+
+    margin: 60px auto;
+
+    padding: 0 40px;
+}
+
+
+/* ACTIVE STUDENT SUMMARY */
+
+.student-summary {
+    background-color: #ffffff;
+
+    border-top: 4px solid #161616;
+
+    padding: 35px 40px;
+
+    margin-bottom: 30px;
+}
+
+.eyebrow {
+    font-size: 11px;
+
+    letter-spacing: 2px;
+
+    font-weight: 700;
+
+    margin: 0 0 15px 0;
+}
+
+.student-summary h1 {
+    font-size: 36px;
+
+    margin: 0;
+
+    font-weight: 600;
+}
+
+
+/* STUDENT LIST */
+
+.student-list {
+    background-color: #ffffff;
+}
+
+.student-list-header,
+.student-row {
+
+    display: grid;
+
+    grid-template-columns: 1fr 1fr 220px;
+
+    align-items: center;
+}
+
+
+.student-list-header {
+
+    padding: 18px 30px;
+
+    border-bottom: 1px solid #dddddd;
+
+    font-size: 11px;
+
+    font-weight: 700;
+
+    letter-spacing: 1.5px;
+
+    text-transform: uppercase;
+}
+
+
+.student-row {
+
+    min-height: 110px;
+
+    padding: 25px 30px;
+
+    border-bottom: 1px solid #dddddd;
+}
+
+
+.student-name {
+
+    font-size: 20px;
+
+    font-weight: 600;
+}
+
+
+.student-time {
+
+    font-size: 16px;
+
     color: #666666;
 }
 
-.student-summary-card a {
+
+.student-action {
+
+    text-align: right;
+}
+
+
+.student-action a {
+
+    display: inline-block;
+
+    border: 1px solid #161616;
+
+    padding: 12px 18px;
+
+    color: #161616;
+
     text-decoration: none;
-    font-weight: bold;
+
+    font-size: 13px;
+
+    font-weight: 600;
+
+    transition: 0.2s;
+}
+
+
+.student-action a:hover {
+
+    background-color: #161616;
+
+    color: #ffffff;
+}
+
+
+/* MOBILE */
+
+@media (max-width: 700px) {
+
+    .top-nav {
+        padding: 22px;
+    }
+
+    .dashboard-container {
+        margin: 30px auto;
+
+        padding: 0 20px;
+    }
+
+    .student-list-header {
+        display: none;
+    }
+
+    .student-row {
+
+        grid-template-columns: 1fr;
+
+        gap: 14px;
+    }
+
+    .student-action {
+        text-align: left;
+    }
+
 }
