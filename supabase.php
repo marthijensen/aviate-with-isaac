@@ -64,8 +64,6 @@ function supabaseRequest($endpoint)
     if ($response === false) {
         $error = curl_error($curl);
 
-        curl_close($curl);
-
         throw new Exception(
             'Supabase request failed: ' . $error
         );
@@ -75,8 +73,6 @@ function supabaseRequest($endpoint)
         $curl,
         CURLINFO_HTTP_CODE
     );
-
-    curl_close($curl);
 
     if ($statusCode >= 400) {
         throw new Exception(

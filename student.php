@@ -1,45 +1,54 @@
+
 <?php
 
-// PLACEHOLDER DATA
-// Later this will come from Supabase using the student ID.
+require_once __DIR__ . '/supabase.php';
 
-$student = [
-    'id' => 1,
-    'first_name' => 'John',
-    'last_name' => 'Smith',
-    'email' => 'john.smith@email.com',
-    'phone' => '(801) 555-1234',
-    'address' => '123 Main Street',
-    'city' => 'Provo',
-    'state' => 'UT',
-    'zip' => '84601',
-    'training_goal' => 'Private Pilot Certificate',
-    'status' => 'active',
-    'created_at' => '2026-05-10'
-];
+// Get the student ID from the URL.
+$studentId = $_GET['id'] ?? null;
 
-$recentLessons = [
-    [
-        'date' => '2026-10-18',
-        'type' => 'Flight Lesson',
-        'notes' => 'Practiced landings and pattern work.'
-    ],
-    [
-        'date' => '2026-10-12',
-        'type' => 'Ground Lesson',
-        'notes' => 'Reviewed weather and airport operations.'
-    ]
-];
+if (!$studentId || !ctype_digit((string) $studentId)) {
+    http_response_code(400);
+    exit('Invalid student ID.');
+}
 
-$upcomingAppointments = [
-    [
-        'date' => '2026-10-24',
-        'time' => '10:00 AM',
-        'type' => 'Flight Lesson'
-    ]
-];
+// Find this student in Supabase.
+$studentId = (int) $studentId;
+
+$results = supabaseRequest(
+    'students?id=eq.' . $studentId . '&select=*'
+);
+
+if (empty($results)) {
+    http_response_code(404);
+    exit('Student not found.');
+}
+
+$student = $results[0];
+
+
+$recentLessons = supabaseRequest(
+    'appointments'
+    . '?student_id=eq.' . urlencode((string) $studentId)
+    . '&select=id,apointment_date,start_time,apointment_type,status'
+    . '&order=apointment_date.desc'
+    . '&limit=5'
+);
+
+
+
+$upcomingAppointments = supabaseRequest(
+    'appointments'
+    . '?student_id=eq.' . urlencode((string) $studentId)
+    . '&apointment_date=gte.' . date('Y-m-d')
+    . '&status=eq.scheduled'
+    . '&select=id,apointment_date,start_time,apointment_type,status'
+    . '&order=apointment_date.asc'
+    . '&limit=5'
+);
+
 
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -178,46 +187,69 @@ $upcomingAppointments = [
     </section>
 
 
-    <section class="profile-section">
+<section class="profile-section">
 
-        <div class="section-heading">
-            <div>
-                <p class="eyebrow">TRAINING HISTORY</p>
-                <h2>Recent Lessons</h2>
-            </div>
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">TRAINING HISTORY</p>
+            <h2>Recent Lessons</h2>
+        </div>
+    </div>
+
+    <div class="table">
+
+        <div class="table-header">
+            
+<span>
+    <?= htmlspecialchars($lesson['apointment_date'] ?? 'No date') ?>
+</span>
+
+<span>
+    <?= htmlspecialchars($lesson['appointment_type'] ?? 'No type') ?>
+</span>
+
+<span>
+    <?= htmlspecialchars($lesson['status'] ?? 'Unknown') ?>
+</span>
+
         </div>
 
-        <div class="table">
+        <?php if (empty($recentLessons)): ?>
 
-            <div class="table-header">
-                <span>Date</span>
-                <span>Type</span>
-                <span>Notes</span>
+            <div class="table-row">
+                <span colspan="3">No appointments found for this student.</span>
             </div>
+
+        <?php else: ?>
 
             <?php foreach ($recentLessons as $lesson): ?>
 
                 <div class="table-row">
 
-                    <span>
-                        <?= htmlspecialchars($lesson['date']) ?>
-                    </span>
+         
+<span>
+    <?= htmlspecialchars($lesson['apointment_date'] ?? 'No date') ?>
+</span>
 
-                    <span>
-                        <?= htmlspecialchars($lesson['type']) ?>
-                    </span>
+<span>
+    <?= htmlspecialchars($lesson['apointment_type'] ?? 'No type') ?>
+</span>
 
-                    <span>
-                        <?= htmlspecialchars($lesson['notes']) ?>
-                    </span>
+<span>
+    <?= htmlspecialchars($lesson['status'] ?? 'Unknown') ?>
+</span>
+
 
                 </div>
 
             <?php endforeach; ?>
 
-        </div>
+        <?php endif; ?>
 
-    </section>
+    </div>
+
+</section>
+
 
 
     <section class="profile-section">
