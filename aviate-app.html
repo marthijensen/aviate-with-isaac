@@ -249,7 +249,7 @@ $activity = array_slice($activity, 0, 5);
       </aside>
 
       <main class="main-display" id="workspace">
-        <p class="eyebrow">INSTRUCTOR DASHBOARD</p>
+        
         <h1 id="page-title">Today at Aviate.</h1>
 
                 <div class="actions" id="actions">
@@ -310,8 +310,7 @@ $activity = array_slice($activity, 0, 5);
 
         <section class="fields-grid" id="fields" aria-label="Dashboard">
           <article class="field-card" data-field="lesson">
-            <p class="field-kicker">TODAY'S SCHEDULE</p>
-            <h2>Upcoming lessons</h2>
+            <h2>Upcoming Lessons</h2>
             <ul class="rows">
               <?php if (!$todayLessons): ?>
                 <li><span>No lessons today.</span></li>
@@ -322,8 +321,7 @@ $activity = array_slice($activity, 0, 5);
           </article>
 
           <article class="field-card" data-field="study">
-            <p class="field-kicker">STUDENTS</p>
-            <h2><?= count($studentList) ?> students</h2>
+            <h2><?= count($studentList) ?> Students</h2>
             <ul class="rows" id="students">
               <?php if (!$studentList): ?>
                 <li><span>No students yet.</span></li>
@@ -334,8 +332,8 @@ $activity = array_slice($activity, 0, 5);
           </article>
 
           <article class="field-card" data-field="lesson">
-            <p class="field-kicker">UPCOMING LESSONS</p>
-            <h2>Next few scheduled</h2>
+            
+            <h2>Next Lessons Scheduled</h2>
             <ul class="rows">
               <?php if (!$upcoming): ?>
                 <li><span>Nothing scheduled.</span></li>
@@ -346,8 +344,8 @@ $activity = array_slice($activity, 0, 5);
           </article>
 
           <article class="field-card" data-field="progress">
-            <p class="field-kicker">STUDENT PROGRESS</p>
-            <h2>Attention needed</h2>
+          
+            <h2>Additional Attention Needed</h2>
             <ul class="rows">
               <?php if (!$attention): ?>
                 <li><span>Nothing incomplete.</span></li>
@@ -358,8 +356,8 @@ $activity = array_slice($activity, 0, 5);
           </article>
 
           <article class="field-card" data-field="notes">
-            <p class="field-kicker">RECENT ACTIVITY</p>
-            <h2>Completed lessons and updates</h2>
+          
+            <h2>Completed Lessons</h2>
                         <ul class="rows">
               <?php if (!$pastLessons && !$activity): ?>
                 <li><span>No completed topics yet.</span></li>
