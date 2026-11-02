@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aviate with Isaac | App</title>
+    <meta
+      name="description"
+      content="Aviate with Isaac student workspace — lesson, progress, study queue, and instructor notes."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <a class="brand" href="#workspace" aria-label="Aviate with Isaac home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path fill="currentColor" d="M12 1.4 14.3 9.2 22.2 12 14.3 14.8 12 22.6 9.7 14.8 1.8 12 9.7 9.2 12 1.4Z" />
+          </svg>
+        </span>
+        <span class="brand-text">
+          <strong>AVIATE</strong>
+          <small>WITH ISAAC</small>
+        </span>
+      </a>
+      <div class="header-meta">
+        <span class="status"><span class="status-dot"></span><span id="save-state">Briefing ready</span></span>
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <p class="nav-label">NAVIGATION</p>
+        <nav class="side-nav" aria-label="App navigation">
+          <button type="button" data-section="overview" class="active">Dashboard</button>
+          <button type="button" data-section="lesson">Schedule</button>
+          <button type="button" data-section="progress">Training Plan</button>
+          <button type="button" data-section="study">Ground School</button>
+          <button type="button" data-section="notes">Instructor Notes</button>
+        </nav>
+        <button class="nav-button" type="button" data-section="notes">Add an instructor note</button>
+        <p class="sidebar-note">
+          Training workspace for students of Aviate with Isaac. Lessons, hours, study topics, and debrief notes stay in one place.
+        </p>
+      </aside>
+
+      <main class="main-display" id="workspace">
+        <p class="eyebrow">INSTRUCTOR DASHBOARD</p>
+        <h1 id="page-title">Today at Aviate.</h1>
+        <p class="lead" id="page-lead">Today's lessons, active students, what needs attention, and the next few flights.</p>
+
+        <div class="actions" id="actions">
+          <button type="button" data-action="schedule">Schedule Lesson</button>
+          <button type="button" data-action="student">Add Student</button>
+          <button type="button" data-action="assign">Create/Assign Lesson</button>
+        </div>
+        <p class="action-note" id="action-note" hidden></p>
+
+        <section class="fields-grid" id="fields" aria-label="Dashboard">
+          <article class="field-card" data-field="lesson">
+            <p class="field-kicker">TODAY'S SCHEDULE</p>
+            <h2>Upcoming lessons</h2>
+            <ul class="rows">
+              <li><span><strong>Maya Chen</strong><small>Steep turns · N172SP</small></span><span class="when"><strong>08:00</strong><small>Today</small></span></li>
+              <li><span><strong>Jordan Hale</strong><small>Holding patterns · N182RG</small></span><span class="when"><strong>10:30</strong><small>Today</small></span></li>
+              <li><span><strong>Priya Shah</strong><small>Soft-field takeoff · N172SP</small></span><span class="when"><strong>14:00</strong><small>Today</small></span></li>
+            </ul>
+          </article>
+
+          <article class="field-card" data-field="study">
+            <p class="field-kicker">STUDENTS</p>
+            <h2>2 active · 4 total</h2>
+            <ul class="rows" id="students">
+              <li><button type="button" data-student="Maya Chen"><span><strong>Maya Chen</strong><small>Private Pilot · 22.4 dual</small></span><em>Active</em></button></li>
+              <li><button type="button" data-student="Jordan Hale"><span><strong>Jordan Hale</strong><small>Instrument · 31.0 dual</small></span><em class="warn">Needs attention</em></button></li>
+              <li><button type="button" data-student="Priya Shah"><span><strong>Priya Shah</strong><small>Private Pilot · 14.8 dual</small></span><em>Active</em></button></li>
+              <li><button type="button" data-student="Alex Ruiz"><span><strong>Alex Ruiz</strong><small>Commercial · 48.2 dual</small></span><em class="warn">Needs attention</em></button></li>
+            </ul>
+            <p class="profile" id="profile" hidden></p>
+          </article>
+
+          <article class="field-card" data-field="lesson">
+            <p class="field-kicker">UPCOMING LESSONS</p>
+            <h2>Next few scheduled</h2>
+            <ul class="rows">
+              <li><span><strong>Alex Ruiz</strong><small>Cross-country planning · N182RG</small></span><span class="when"><strong>09:00</strong><small>Thu 15 Oct</small></span></li>
+              <li><span><strong>Maya Chen</strong><small>Solo prep · N172SP</small></span><span class="when"><strong>11:00</strong><small>Fri 16 Oct</small></span></li>
+              <li><span><strong>Jordan Hale</strong><small>Approach briefing · N182RG</small></span><span class="when"><strong>15:30</strong><small>Fri 16 Oct</small></span></li>
+            </ul>
+          </article>
+
+          <article class="field-card" data-field="progress">
+            <p class="field-kicker">STUDENT PROGRESS</p>
+            <h2>Attention needed</h2>
+            <ul class="rows">
+              <li><span><strong>Jordan Hale</strong><small>Incomplete lesson · Holding-pattern debrief still open from Monday.</small></span></li>
+              <li><span><strong>Alex Ruiz</strong><small>Overdue item · Knowledge-test practice set was due Friday.</small></span></li>
+              <li><span><strong>Priya Shah</strong><small>Needs attention · Pattern work still outside altitude standards.</small></span></li>
+            </ul>
+          </article>
+
+          <article class="field-card" data-field="notes">
+            <p class="field-kicker">RECENT ACTIVITY</p>
+            <h2>Completed lessons and updates</h2>
+            <ul class="rows">
+              <li><span><strong>Yesterday</strong><small>Maya Chen completed the traffic-pattern lesson.</small></span></li>
+              <li><span><strong>Yesterday</strong><small>Jordan Hale updated ground notes on weather minimums.</small></span></li>
+              <li><span><strong>Mon</strong><small>Priya Shah logged 1.2 hours of dual in N172SP.</small></span></li>
+            </ul>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <style>
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+    </style>
+    <script>
+      const titles = {
+        overview: ["Today at Aviate.", "Today's lessons, active students, what needs attention, and the next few flights."],
+        lesson: ["Schedule", "Today's schedule and the next few lessons."],
+        progress: ["Training Plan", "Students with incomplete lessons, overdue items, or areas that need attention."],
+        study: ["Ground School", "Active students and quick access to their profiles."],
+        notes: ["Instructor Notes", "Recently completed lessons and student updates."],
+      };
+      const notes = {
+        schedule: "Schedule Lesson is ready. Pick a student, time, and lesson template.",
+        student: "Add Student is ready. Enter a name and training stage.",
+        assign: "Create/Assign Lesson is ready. Choose a template and the students who should receive it.",
+      };
+
+      function show(section) {
+        document.querySelectorAll(".side-nav button").forEach((button) => {
+          button.classList.toggle("active", button.dataset.section === section);
+        });
+        document.querySelectorAll("[data-field]").forEach((card) => {
+          card.hidden = section !== "overview" && card.dataset.field !== section;
+        });
+        document.getElementById("fields").classList.toggle("single", section !== "overview");
+        document.getElementById("page-title").textContent = titles[section][0];
+        document.getElementById("page-lead").textContent = titles[section][1];
+        document.getElementById("actions").hidden = section !== "overview";
+      }
+
+      document.querySelectorAll("[data-section]").forEach((button) => {
+        button.addEventListener("click", () => show(button.dataset.section));
+      });
+
+      document.querySelectorAll("[data-action]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const note = document.getElementById("action-note");
+          note.hidden = false;
+          note.textContent = notes[button.dataset.action];
+        });
+      });
+
+      document.querySelectorAll("[data-student]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const profile = document.getElementById("profile");
+          profile.hidden = false;
+          profile.textContent = "Profile open: " + button.dataset.student + ". Training stage, hours, and next lesson sit here.";
+        });
+      });
+    </script>
+  </body>
+</html>
