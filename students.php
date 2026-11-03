@@ -55,10 +55,18 @@ $activeStudentCount = count($students);
             STUDENT OVERVIEW
         </p>
 
-        <h1>
-            Active Students:
-            <?= $activeStudentCount ?>
-        </h1>
+        <div class="summary-row">
+
+            <h1>
+                Active Students:
+                <?= $activeStudentCount ?>
+            </h1>
+
+            <a class="button-primary" href="add-student.php">
+                + Add Student
+            </a>
+
+        </div>
 
     </section>
 
