@@ -1,18 +1,20 @@
 <?php
 
-/**
- * Returns the number of active students.
- *
- * Placeholder:
- * $pdo should be replaced with the team's actual
- * database connection variable.
- */
-function getActiveStudentCount($pdo) {
-    $sql = "SELECT COUNT(*)
-            FROM students
-            WHERE status = 'active'";
+require_once __DIR__ . '/supabase.php';
 
-    $stmt = $pdo->query($sql);
+function getActiveStudents()
+{
+    return supabaseRequest(
+        'students'
+        . '?status=eq.active'
+        . '&select=id,first_name,last_name,created_at,status'
+        . '&order=created_at.asc'
+    );
+}
 
-    return (int) $stmt->fetchColumn();
+function getActiveStudentCount()
+{
+    $students = getActiveStudents();
+
+    return count($students);
 }

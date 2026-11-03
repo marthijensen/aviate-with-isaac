@@ -32,7 +32,7 @@ function loadEnv($path)
 loadEnv(__DIR__ . '/.env');
 
 
-function supabaseRequest($endpoint)
+function supabaseRequest($endpoint, $method = 'GET', $body = null)
 {
     $supabaseUrl = getenv('SUPABASE_URL');
     $supabaseKey = getenv('SUPABASE_SECRET_KEY');
@@ -49,22 +49,30 @@ function supabaseRequest($endpoint)
 
     $curl = curl_init();
 
-    curl_setopt_array($curl, [
+    $options = [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST => $method,
         CURLOPT_HTTPHEADER => [
             'apikey: ' . $supabaseKey,
             'Authorization: Bearer ' . $supabaseKey,
-            'Content-Type: application/json'
+            'Content-Type: application/json',
+            // Ask Supabase to send back the saved record.
+            'Prefer: return=representation'
         ]
-    ]);
+    ];
+
+    // Send data along with POST/PATCH requests.
+    if ($body !== null) {
+        $options[CURLOPT_POSTFIELDS] = json_encode($body);
+    }
+
+    curl_setopt_array($curl, $options);
 
     $response = curl_exec($curl);
 
     if ($response === false) {
         $error = curl_error($curl);
-
-        curl_close($curl);
 
         throw new Exception(
             'Supabase request failed: ' . $error
@@ -76,7 +84,10 @@ function supabaseRequest($endpoint)
         CURLINFO_HTTP_CODE
     );
 
+feature/student-list-navigation
 
+
+main
     if ($statusCode >= 400) {
         throw new Exception(
             'Supabase returned HTTP '
