@@ -1,0 +1,229 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #f5f5f2;
+    color: #161616;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.top-nav {
+    background: #ffffff;
+    border-bottom: 1px solid #deded8;
+    padding: 28px 60px;
+}
+
+.logo {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+.student-profile-container {
+    max-width: 1150px;
+    margin: 50px auto;
+    padding: 0 40px 70px;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 30px;
+    color: #161616;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.eyebrow,
+.section-label {
+    margin: 0 0 14px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+.student-hero {
+    background: #ffffff;
+    border-top: 4px solid #161616;
+    padding: 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 30px;
+}
+
+.student-hero h1 {
+    margin: 0;
+    font-size: 44px;
+}
+
+.student-goal {
+    margin: 12px 0 0;
+    color: #666666;
+    font-size: 17px;
+}
+
+.student-status {
+    border: 1px solid #161616;
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+}
+
+.profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 24px;
+}
+
+.profile-card,
+.profile-section {
+    background: #ffffff;
+    padding: 32px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 30px;
+    padding: 17px 0;
+    border-bottom: 1px solid #e4e4e0;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-row span {
+    color: #666666;
+    font-size: 14px;
+}
+
+.info-row strong {
+    text-align: right;
+    font-size: 14px;
+}
+
+.profile-section {
+    margin-top: 24px;
+}
+
+.section-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 25px;
+}
+
+.section-heading h2 {
+    margin: 0;
+    font-size: 28px;
+}
+
+.section-heading a {
+    color: #161616;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.progress-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: #deded8;
+}
+
+.progress-card {
+    background: #ffffff;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.progress-number {
+    font-size: 38px;
+    font-weight: 700;
+}
+
+.progress-card span:last-child {
+    color: #666666;
+    font-size: 13px;
+}
+
+.table {
+    border-top: 1px solid #deded8;
+}
+
+.table-header,
+.table-row {
+    display: grid;
+    grid-template-columns: 160px 200px 1fr;
+    gap: 25px;
+    padding: 18px 0;
+    border-bottom: 1px solid #deded8;
+}
+
+.table-header {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+
+.table-row {
+    font-size: 14px;
+}
+
+@media (max-width: 750px) {
+
+    .top-nav {
+        padding: 22px;
+    }
+
+    .student-profile-container {
+        padding: 0 20px 50px;
+    }
+
+    .student-hero {
+        flex-direction: column;
+    }
+
+    .student-hero h1 {
+        font-size: 34px;
+    }
+
+    .profile-grid,
+    .progress-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .table-header {
+        display: none;
+    }
+
+    .table-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .info-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .info-row strong {
+        text-align: left;
+    }
+}
