@@ -31,15 +31,13 @@ SUPABASE_SECRET_KEY=
 APP_TIMEZONE=America/Denver
 ```
 
-`APP_TIMEZONE` controls how lesson dates and times are displayed. Use a [PHP time zone name](https://www.php.net/manual/en/timezones.php).
+`APP_TIMEZONE` is the time zone appointment dates and times are in. Appointments are stored without a time zone, so this decides which lessons have already started. Use a [PHP time zone name](https://www.php.net/manual/en/timezones.php).
 
 The secret key is only used by PHP on the server. Never commit `.env`.
 
-## 3. Create the Database Tables
+## 3. Database
 
-Run the SQL files in `supabase/migrations/` in order, using the Supabase **SQL Editor**.
-
-To add sample students and lessons, first make sure there is at least one user in **Authentication > Users**, then run `supabase/seed.sql` in the SQL Editor.
+The app reads the existing tables in the team's Supabase project. See [Database Design](database.md) for the columns each page uses.
 
 ## 4. Run the App
 

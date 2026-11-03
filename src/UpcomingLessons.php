@@ -5,80 +5,114 @@ declare(strict_types=1);
 /**
  * Story 19 - View upcoming lessons.
  *
- * Retrieves future scheduled lessons and prepares them for the dashboard.
+ * Reads scheduled lessons from the `appointments` table (the same table
+ * aviate-app.html writes to when a lesson is scheduled) and prepares the
+ * ones that haven't happened yet for the dashboard.
+ *
+ * `apointment_date` and `start_time` are a local date and time with no
+ * time zone, so they are interpreted in the app's time zone (APP_TIMEZONE).
  */
 final class UpcomingLessons
 {
     public const DEFAULT_LIMIT = 10;
 
+    /** Appointment statuses that never count as upcoming. */
+    private const EXCLUDED_STATUSES = ['cancelled', 'canceled', 'completed'];
+
     /**
-     * Fetches future, scheduled lessons from Supabase, soonest first.
+     * Fetches upcoming appointments and their students from Supabase, soonest first.
      *
      * @return list<array{id: string, student_name: string, date: string, time: string, lesson_type: string}>
      */
-    public static function fetch(SupabaseClient $supabase, DateTimeImmutable $now, DateTimeZone $displayZone, int $limit = self::DEFAULT_LIMIT): array
+    public static function fetch(SupabaseClient $supabase, DateTimeImmutable $now, DateTimeZone $zone, int $limit = self::DEFAULT_LIMIT): array
     {
-        $rows = $supabase->select('lessons', [
-            'select' => 'id,scheduled_start,status,lesson_type,student:students(first_name,last_name)',
-            'status' => 'eq.scheduled',
-            'scheduled_start' => 'gte.' . $now->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z'),
-            'order' => 'scheduled_start.asc',
-            'limit' => (string) $limit,
+        $appointments = $supabase->select('appointments', [
+            'select' => 'id,student_id,apointment_date,start_time,apointment_type,status',
+            'apointment_date' => 'gte.' . $now->setTimezone($zone)->format('Y-m-d'),
+            'order' => 'apointment_date.asc,start_time.asc',
         ]);
 
-        return self::prepare($rows, $now, $displayZone);
+        $studentIds = array_values(array_unique(array_filter(
+            array_map(static fn (array $row): int => (int) ($row['student_id'] ?? 0), $appointments)
+        )));
+
+        $students = $studentIds === [] ? [] : $supabase->select('students', [
+            'select' => 'id,first_name,last_name',
+            'id' => 'in.(' . implode(',', $studentIds) . ')',
+        ]);
+
+        return self::prepare($appointments, $students, $now, $zone, $limit);
     }
 
     /**
-     * Keeps only scheduled lessons that have not started yet, sorts them by
-     * date/time and formats them for display.
+     * Keeps appointments that haven't started and aren't cancelled or
+     * completed, sorts them by date/time and formats them for display.
      *
-     * The database query already filters and sorts; this repeats it so the
-     * dashboard stays correct regardless of the data source.
-     *
-     * @param list<array<string, mixed>> $rows
+     * @param list<array<string, mixed>> $appointments Rows from `appointments`
+     * @param list<array<string, mixed>> $students Rows from `students`
      * @return list<array{id: string, student_name: string, date: string, time: string, lesson_type: string}>
      */
-    public static function prepare(array $rows, DateTimeImmutable $now, DateTimeZone $displayZone): array
+    public static function prepare(array $appointments, array $students, DateTimeImmutable $now, DateTimeZone $zone, int $limit = self::DEFAULT_LIMIT): array
     {
-        $lessons = [];
-
-        foreach ($rows as $row) {
-            if (($row['status'] ?? '') !== 'scheduled' || empty($row['scheduled_start'])) {
-                continue;
-            }
-
-            $start = new DateTimeImmutable((string) $row['scheduled_start']);
-            if ($start < $now) {
-                continue;
-            }
-
-            $lessons[] = ['start' => $start, 'row' => $row];
+        $namesById = [];
+        foreach ($students as $student) {
+            $namesById[(string) ($student['id'] ?? '')] = trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
         }
 
-        usort($lessons, static fn (array $a, array $b): int => $a['start'] <=> $b['start']);
+        $today = $now->setTimezone($zone)->format('Y-m-d');
+        $lessons = [];
 
-        return array_map(static function (array $lesson) use ($displayZone): array {
-            $local = $lesson['start']->setTimezone($displayZone);
+        foreach ($appointments as $row) {
+            $status = strtolower(trim((string) ($row['status'] ?? '')));
+            if (in_array($status, self::EXCLUDED_STATUSES, true)) {
+                continue;
+            }
+
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', (string) ($row['apointment_date'] ?? ''), $zone);
+            if ($date === false) {
+                continue;
+            }
+
+            $time = trim((string) ($row['start_time'] ?? ''));
+            $start = $time !== '' ? self::combine($date, $time) : null;
+
+            if ($start !== null ? $start < $now : $date->format('Y-m-d') < $today) {
+                continue;
+            }
+
+            $lessons[] = [
+                // Appointments without a start time sort to the end of their day.
+                'sort' => $start ?? $date->setTime(23, 59, 59),
+                'start' => $start,
+                'date' => $date,
+                'row' => $row,
+            ];
+        }
+
+        usort($lessons, static fn (array $a, array $b): int => $a['sort'] <=> $b['sort']);
+
+        return array_map(static function (array $lesson) use ($namesById): array {
+            $name = $namesById[(string) ($lesson['row']['student_id'] ?? '')] ?? '';
+            $type = trim((string) ($lesson['row']['apointment_type'] ?? ''));
 
             return [
                 'id' => (string) ($lesson['row']['id'] ?? ''),
-                'student_name' => self::studentName($lesson['row']['student'] ?? null),
-                // Same formats as the cards in aviate-app.html.
-                'date' => $local->format('D n/j'),
-                'time' => $local->format('g:i A'),
-                'lesson_type' => ucfirst((string) ($lesson['row']['lesson_type'] ?? '')),
+                // Fallbacks and formats match the cards in aviate-app.html.
+                'student_name' => $name !== '' ? $name : 'Student',
+                'date' => $lesson['date']->format('D n/j'),
+                'time' => $lesson['start'] ? $lesson['start']->format('g:i A') : 'Time TBD',
+                'lesson_type' => $type !== '' ? $type : 'Lesson',
             ];
-        }, $lessons);
+        }, array_slice($lessons, 0, $limit));
     }
 
-    private static function studentName(mixed $student): string
+    /** Combines a local date with a Postgres `time` value such as "14:30:00". */
+    private static function combine(DateTimeImmutable $date, string $time): ?DateTimeImmutable
     {
-        if (!is_array($student)) {
-            return 'Unknown student';
+        if (!preg_match('/^(\d{1,2}):(\d{2})(?::(\d{2}))?/', $time, $parts)) {
+            return null;
         }
 
-        $name = trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
-        return $name !== '' ? $name : 'Unknown student';
+        return $date->setTime((int) $parts[1], (int) $parts[2], (int) ($parts[3] ?? 0));
     }
 }
