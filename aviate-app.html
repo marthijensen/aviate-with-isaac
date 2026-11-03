@@ -1,0 +1,442 @@
+<?php
+require __DIR__ . '/supabase.php';
+
+
+function h(?string $value): string
+{
+    return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
+}
+
+function studentName(array $student): string
+{
+    return trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
+}
+
+function clock(?string $time): string
+{
+    if (!$time) {
+        return '';
+    }
+    $parsed = date_create($time);
+    return $parsed ? $parsed->format('g:i A') : $time;
+}
+
+function rows(string $endpoint): array
+{
+    try {
+        return supabaseRequest($endpoint);
+    } catch (Exception $error) {
+        return ['_error' => $error->getMessage()];
+    }
+}
+
+$formMessage = '';
+$formError = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        $action = $_POST['action'] ?? '';
+
+                if ($action === 'student') {
+            $first = trim($_POST['first_name'] ?? '');
+            $last = trim($_POST['last_name'] ?? '');
+            $email = trim($_POST['email'] ?? '');
+            $goal = trim($_POST['training_goal'] ?? '');
+            $phone = trim($_POST['phone'] ?? '');
+            $address = trim($_POST['address'] ?? '');
+            $city = trim($_POST['city'] ?? '');
+            $state = trim($_POST['state'] ?? '');
+            $zip = trim($_POST['zip'] ?? '');
+            $instructorId = (int) ($_POST['instructor_id'] ?? 0);
+
+            if ($first === '' || $last === '' || $goal === '' || $phone === '' || $address === '' || $city === '' || $state === '' || $zip === '' || $instructorId <= 0) {
+                throw new Exception('All student fields are required.');
+            }
+
+            $profile = supabaseWrite('profiles', [
+                'profile_type' => 'student',
+                'profile_name' => $first . ' ' . $last,
+            ]);
+            $profileId = $profile[0]['id'] ?? null;
+
+            if (!$profileId) {
+                throw new Exception('Could not create a profile.');
+            }
+
+            $student = [
+                'first_name' => $first,
+                'last_name' => $last,
+                'phone' => $phone,
+                'address' => $address,
+                'city' => $city,
+                'state' => $state,
+                'zip' => $zip,
+                'training_goal' => $goal,
+                'status' => 'active',
+                'instructor_id' => $instructorId,
+                'profile_id' => $profileId,
+            ];
+
+            if ($email !== '') {
+                $student['email'] = $email;
+            }
+
+            supabaseWrite('students', $student);
+            $formMessage = 'Student added.';
+        }
+
+        if ($action === 'schedule') {
+            $studentId = (int) ($_POST['student_id'] ?? 0);
+            $lesson = trim($_POST['lesson'] ?? '');
+            $date = $_POST['appointment_date'] ?? '';
+            $time = $_POST['start_time'] ?? '';
+
+            if ($studentId <= 0 || $lesson === '' || $date === '' || $time === '') {
+                throw new Exception('Student, lesson, date, and time are required.');
+            }
+
+            supabaseWrite('appointments', [
+                'student_id' => $studentId,
+                'apointment_date' => $date,
+                'start_time' => $time,
+                'apointment_type' => $lesson,
+                'status' => 'scheduled',
+            ]);
+
+            $formMessage = 'Lesson scheduled.';
+        }
+    } catch (Exception $error) {
+        $formError = $error->getMessage();
+    }
+}
+
+$studentRows = rows('students?select=id,first_name,last_name,status&order=last_name.asc');
+$appointmentRows = rows('appointments?select=id,student_id,apointment_date,start_time,apointment_type,status&order=apointment_date.asc,start_time.asc');
+$progressRows = rows('student_progress?select=student_id,course_topic_id,is_completed,completed_at&order=completed_at.desc');
+$topicRows = rows('course_topics?select=topic_id,topic');
+$lessonRows = rows('lessons?select=id,lesson_type&order=lesson_type.asc');
+$instructorRows = rows('Instructors?select=id,first_name,last_name&order=last_name.asc');
+
+$errors = [];
+foreach (['students' => $studentRows, 'appointments' => $appointmentRows, 'progress' => $progressRows, 'topics' => $topicRows, 'lessons' => $lessonRows, 'instructors' => $instructorRows] as $label => $result) {
+    if (isset($result['_error'])) {
+        $errors[] = $label . ': ' . $result['_error'];
+    }
+}
+
+$students = isset($studentRows['_error']) ? [] : $studentRows;
+$appointments = isset($appointmentRows['_error']) ? [] : $appointmentRows;
+$progress = isset($progressRows['_error']) ? [] : $progressRows;
+$topics = isset($topicRows['_error']) ? [] : $topicRows;
+$lessonList = isset($lessonRows['_error']) ? [] : $lessonRows;
+$instructorList = isset($instructorRows['_error']) ? [] : $instructorRows;
+$lessonChoices = [];
+foreach ($lessonList as $lesson) {
+    $label = trim((string) ($lesson['lesson_type'] ?? ''));
+    if ($label !== '' && !in_array($label, $lessonChoices, true)) {
+        $lessonChoices[] = $label;
+    }
+}
+
+$byId = [];
+foreach ($students as $student) {
+    $byId[$student['id']] = $student;
+}
+
+$topicName = [];
+foreach ($topics as $topic) {
+    $topicName[$topic['topic_id']] = $topic['topic'] ?? 'Topic';
+}
+
+$active = array_values(array_filter(
+    $students,
+    fn ($student) => strtolower((string) ($student['status'] ?? '')) === 'active'
+));
+$studentList = $active !== [] ? $active : $students;
+
+$today = date('Y-m-d');
+$todayLessons = [];
+$upcoming = [];
+$pastLessons = [];
+foreach ($appointments as $appointment) {
+    $status = strtolower((string) ($appointment['status'] ?? ''));
+    if (in_array($status, ['cancelled', 'canceled'], true)) {
+        continue;
+    }
+    $date = $appointment['apointment_date'] ?? '';
+    $student = $byId[$appointment['student_id']] ?? null;
+    $item = [
+        'student' => $student ? studentName($student) : 'Student',
+        'lesson' => $appointment['apointment_type'] ?: 'Lesson',
+        'time' => clock($appointment['start_time'] ?? ''),
+        'date' => $date,
+    ];
+    if ($date === $today) {
+        $todayLessons[] = $item;
+    } elseif ($date > $today) {
+        $upcoming[] = $item;
+    } elseif ($date !== '' && $date < $today) {
+        $pastLessons[] = $item;
+    }
+}
+$upcoming = array_slice($upcoming, 0, 5);
+$pastLessons = array_slice(array_reverse($pastLessons), 0, 5);
+
+$attention = [];
+$activity = [];
+foreach ($progress as $row) {
+    $student = $byId[$row['student_id']] ?? null;
+    $name = $student ? studentName($student) : 'Student';
+    $topic = $topicName[$row['course_topic_id']] ?? 'Topic';
+    if (filter_var($row['is_completed'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+        $activity[] = $name . ' finished ' . $topic;
+    } else {
+        $attention[] = ['student' => $name, 'note' => $topic];
+    }
+}
+$attention = array_slice($attention, 0, 5);
+$activity = array_slice($activity, 0, 5);
+?>
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aviate with Isaac | App</title>
+    <meta
+      name="description"
+      content="Aviate with Isaac student workspace — lesson, progress, study queue, and instructor notes."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <a class="brand" href="#workspace" aria-label="Aviate with Isaac home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path fill="currentColor" d="M12 1.4 14.3 9.2 22.2 12 14.3 14.8 12 22.6 9.7 14.8 1.8 12 9.7 9.2 12 1.4Z" />
+          </svg>
+        </span>
+        <span class="brand-text">
+          <strong>AVIATE</strong>
+          <small>WITH ISAAC</small>
+        </span>
+      </a>
+      <div class="header-meta">
+        <span class="status"><span class="status-dot"></span><span id="save-state">Briefing ready</span></span>
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        
+        <nav class="side-nav" aria-label="App navigation">
+          <button type="button" data-section="overview" class="active">Dashboard</button>
+          <button type="button" data-section="study">Students</button>
+          <button type="button" data-section="lesson">Schedule</button>
+          <button type="button" data-section="progress">Training Plan</button>
+          <button type="button" data-section="notes">Completed Lessons</button>
+        </nav>
+        <button class="nav-button" type="button" data-section="notes">Add an instructor note</button>
+    
+      </aside>
+
+      <main class="main-display" id="workspace">
+        
+        <h1 id="page-title">Today at Aviate.</h1>
+
+                <div class="actions" id="actions">
+          <button type="button" data-form="form-schedule">Schedule Lesson</button>
+          <button type="button" data-form="form-student">Add Student</button>
+        </div>
+
+        <?php if ($formMessage): ?>
+          <p class="action-note"><?= h($formMessage) ?></p>
+        <?php endif; ?>
+        <?php if ($formError): ?>
+          <p class="action-note"><?= h($formError) ?></p>
+        <?php endif; ?>
+
+        <form id="form-schedule" class="entry-form field-card" method="post" hidden>
+          <h2>Schedule a lesson</h2>
+          <select name="student_id" required>
+            <option value="">Student</option>
+            <?php foreach ($students as $student): ?>
+              <option value="<?= h((string) $student['id']) ?>"><?= h(studentName($student)) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <select name="lesson" required>
+            <option value="">Lesson</option>
+            <?php foreach ($lessonChoices as $label): ?>
+              <option value="<?= h($label) ?>"><?= h($label) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <input type="date" name="appointment_date" required>
+          <input type="time" name="start_time" required>
+          <button type="submit" name="action" value="schedule">Save lesson</button>
+        </form>
+
+        <form id="form-student" class="entry-form field-card" method="post" hidden>
+          <h2>Add a student</h2>
+          <input name="first_name" placeholder="First name" required>
+          <input name="last_name" placeholder="Last name" required>
+          <input type="email" name="email" placeholder="Email">
+          <input name="training_goal" placeholder="Training goal" required>
+          <input name="phone" placeholder="Cell phone" required>
+          <input name="address" placeholder="Address" required>
+          <input name="city" placeholder="City" required>
+          <input name="state" placeholder="State" required>
+          <input name="zip" placeholder="ZIP" required>
+            <select name="instructor_id" required>
+            <option value="">Instructor</option>
+            <?php foreach ($instructorList as $instructor): ?>
+              <option value="<?= h((string) $instructor['id']) ?>"><?= h(trim(($instructor['first_name'] ?? '') . ' ' . ($instructor['last_name'] ?? ''))) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <button type="submit" name="action" value="student">Save student</button>
+        </form>
+
+
+                <?php if ($errors): ?>
+          <p class="action-note"><?= h(implode(' ', $errors)) ?></p>
+        <?php endif; ?>
+
+        <section class="fields-grid" id="fields" aria-label="Dashboard">
+          <article class="field-card" data-field="lesson">
+            <h2>Upcoming Lessons</h2>
+            <ul class="rows">
+              <?php if (!$todayLessons): ?>
+                <li><span>No lessons today.</span></li>
+              <?php else: foreach ($todayLessons as $lesson): ?>
+                <li><span><strong><?= h($lesson['student']) ?></strong><small><?= h($lesson['lesson']) ?></small></span><span class="when"><strong><?= h($lesson['time']) ?></strong><small>Today</small></span></li>
+              <?php endforeach; endif; ?>
+            </ul>
+          </article>
+
+          <article class="field-card" data-field="study">
+            <h2><?= count($studentList) ?> Students</h2>
+            <ul class="rows" id="students">
+              <?php if (!$studentList): ?>
+                <li><span>No students yet.</span></li>
+              <?php else: foreach ($studentList as $student): ?>
+                <li><span><strong><?= h(studentName($student)) ?></strong></span></li>
+              <?php endforeach; endif; ?>
+            </ul>
+          </article>
+
+          <article class="field-card" data-field="lesson">
+            
+            <h2>Next Lessons Scheduled</h2>
+            <ul class="rows">
+              <?php if (!$upcoming): ?>
+                <li><span>Nothing scheduled.</span></li>
+              <?php else: foreach ($upcoming as $lesson): ?>
+                <li><span><strong><?= h($lesson['student']) ?></strong><small><?= h($lesson['lesson']) ?></small></span><span class="when"><strong><?= h($lesson['time']) ?></strong><small><?= h(date('D n/j', strtotime($lesson['date']))) ?></small></span></li>
+              <?php endforeach; endif; ?>
+            </ul>
+          </article>
+
+          <article class="field-card" data-field="progress">
+          
+            <h2>Additional Attention Needed</h2>
+            <ul class="rows">
+              <?php if (!$attention): ?>
+                <li><span>Nothing incomplete.</span></li>
+              <?php else: foreach ($attention as $item): ?>
+                <li><span><strong><?= h($item['student']) ?></strong><small><?= h($item['note']) ?></small></span></li>
+              <?php endforeach; endif; ?>
+            </ul>
+          </article>
+
+          <article class="field-card" data-field="notes">
+          
+            <h2>Completed Lessons</h2>
+                        <ul class="rows">
+              <?php if (!$pastLessons && !$activity): ?>
+                <li><span>No completed topics yet.</span></li>
+              <?php endif; ?>
+              <?php foreach ($pastLessons as $lesson): ?>
+                <li><span><strong><?= h($lesson['student']) ?></strong><small><?= h($lesson['lesson']) ?></small></span><span class="when"><strong><?= h($lesson['time']) ?></strong><small><?= h(date('D n/j', strtotime($lesson['date']))) ?></small></span></li>
+              <?php endforeach; ?>
+              <?php foreach ($activity as $line): ?>
+                <li><span><?= h($line) ?></span></li>
+              <?php endforeach; ?>
+            </ul>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <style>
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+      .entry-form { display: grid; gap: 0.75rem; margin: 1rem 0 1.5rem; max-width: 28rem; }
+      .entry-form input, .entry-form select { min-height: 2.75rem; padding: 0.4rem 0.7rem; }
+    </style>
+    <script>
+      const titles = {
+        overview: ["Today at Aviate."],
+        lesson: ["Schedule", "Today's schedule and the next few lessons."],
+        progress: ["Training Plan", "Students with incomplete lessons, overdue items, or areas that need attention."],
+        study: ["Ground School", "Active students and quick access to their profiles."],
+        notes: ["Instructor Notes", "Recently completed lessons and student updates."],
+      };
+      const notes = {
+        schedule: "Schedule Lesson is ready. Pick a student, time, and lesson template.",
+        student: "Add Student is ready. Enter a name and training stage.",
+        assign: "Create/Assign Lesson is ready. Choose a template and the students who should receive it.",
+      };
+
+      function show(section) {
+        document.querySelectorAll(".side-nav button").forEach((button) => {
+          button.classList.toggle("active", button.dataset.section === section);
+        });
+        document.querySelectorAll("[data-field]").forEach((card) => {
+          card.hidden = section !== "overview" && card.dataset.field !== section;
+        });
+        document.getElementById("fields").classList.toggle("single", section !== "overview");
+        document.getElementById("page-title").textContent = titles[section][0];
+        document.getElementById("page-lead").textContent = titles[section][1];
+        document.getElementById("actions").hidden = section !== "overview";
+      }
+
+      document.querySelectorAll("[data-section]").forEach((button) => {
+        button.addEventListener("click", () => show(button.dataset.section));
+      });
+
+
+      document.querySelectorAll("[data-student]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const profile = document.getElementById("profile");
+          profile.hidden = false;
+          profile.textContent = "Profile open: " + button.dataset.student + ". Training stage, hours, and next lesson sit here.";
+        });
+      });
+              document.querySelectorAll("[data-form]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const target = document.getElementById(button.dataset.form);
+          const wasClosed = target.hidden;
+          document.querySelectorAll(".entry-form").forEach((form) => {
+            form.hidden = true;
+          });
+          target.hidden = !wasClosed;
+        });
+      });
+    </script>
+  </body>
+</html>

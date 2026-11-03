@@ -66,3 +66,34 @@ Application tables should use Supabase Row Level Security so users only access i
 The initial database schema will be finalized as part of Sprint 1.
 
 The team should prioritize the tables required by the first Sprint 1 stories before creating the complete application schema.
+
+## Upcoming Lessons (Story 19)
+
+The dashboard's **Upcoming Lessons** card reads existing tables. It doesn't add any.
+
+### appointments
+
+| Column | Used for |
+| --- | --- |
+| id | Row key |
+| student_id | Looks up the student's name in `students` |
+| apointment_date | Lesson date (local date, no time zone) |
+| start_time | Lesson time (local time, no time zone) |
+| apointment_type | Lesson label shown under the student's name |
+| status | `cancelled`, `canceled` and `completed` are hidden |
+
+The `apointment_*` spelling matches the column names in Supabase.
+
+### students
+
+| Column | Used for |
+| --- | --- |
+| id | Matched to `appointments.student_id` |
+| first_name, last_name | Student name |
+
+### Rules
+
+- Shows appointments from today on whose start time hasn't passed yet, in `APP_TIMEZONE`.
+- Hides cancelled and completed appointments. Appointments with no status are shown.
+- Appointments with no `start_time` stay listed for their whole day, after the timed ones, and show "Time TBD".
+- Sorted by date, then time. Shows up to 10.
