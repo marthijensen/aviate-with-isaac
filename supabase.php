@@ -76,7 +76,6 @@ function supabaseRequest($endpoint)
         CURLINFO_HTTP_CODE
     );
 
-    curl_close($curl);
 
     if ($statusCode >= 400) {
         throw new Exception(
@@ -94,4 +93,46 @@ function supabaseRequest($endpoint)
     }
 
     return $decoded;
+}
+
+function supabaseWrite($endpoint, array $payload)
+{
+    $supabaseUrl = getenv('SUPABASE_URL');
+    $supabaseKey = getenv('SUPABASE_SECRET_KEY');
+
+    if (!$supabaseUrl || !$supabaseKey) {
+        throw new Exception('Supabase environment variables are missing.');
+    }
+
+    $url = rtrim($supabaseUrl, '/') . '/rest/v1/' . $endpoint;
+    $curl = curl_init();
+
+    curl_setopt_array($curl, [
+        CURLOPT_URL => $url,
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_HTTPHEADER => [
+            'apikey: ' . $supabaseKey,
+            'Authorization: Bearer ' . $supabaseKey,
+            'Content-Type: application/json',
+            'Prefer: return=representation',
+        ],
+    ]);
+
+    $response = curl_exec($curl);
+
+    if ($response === false) {
+        throw new Exception('Supabase request failed: ' . curl_error($curl));
+    }
+
+    $statusCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+    if ($statusCode >= 400) {
+        throw new Exception('Supabase returned HTTP ' . $statusCode . ': ' . $response);
+    }
+
+    $decoded = json_decode($response, true);
+
+    return is_array($decoded) ? $decoded : [];
 }
