@@ -64,8 +64,9 @@ final class UpcomingLessons
             return [
                 'id' => (string) ($lesson['row']['id'] ?? ''),
                 'student_name' => self::studentName($lesson['row']['student'] ?? null),
-                'date' => $local->format('D, M j, Y'),
-                'time' => $local->format('g:i A T'),
+                // Same formats as the cards in aviate-app.html.
+                'date' => $local->format('D n/j'),
+                'time' => $local->format('g:i A'),
                 'lesson_type' => ucfirst((string) ($lesson['row']['lesson_type'] ?? '')),
             ];
         }, $lessons);

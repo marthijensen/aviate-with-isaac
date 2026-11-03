@@ -136,7 +136,8 @@ h1, h2 {
 
 .side-nav { display: flex; flex-direction: column; gap: 4px; }
 
-.side-nav button {
+.side-nav button,
+.side-nav a {
   display: flex;
   align-items: center;
   min-height: 44px;
@@ -151,14 +152,19 @@ h1, h2 {
   font-weight: 500;
 }
 
+.side-nav a { text-decoration: none; }
+
 .side-nav button.active,
-.side-nav button:hover {
+.side-nav button:hover,
+.side-nav a.active,
+.side-nav a:hover {
   background: rgba(255, 255, 255, 0.05);
   color: var(--paper);
   border-left-color: var(--gold);
 }
 
-.side-nav button.active { color: var(--gold-soft); }
+.side-nav button.active,
+.side-nav a.active { color: var(--gold-soft); }
 
 .nav-button {
   display: block;

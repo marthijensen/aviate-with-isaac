@@ -54,7 +54,7 @@ check($status === 405, 'wrong method returns 405');
 
 [$status, $body] = dispatch($router, 'GET', '/does-not-exist');
 check($status === 404, 'unknown path returns 404');
-check(str_contains($body, 'Page not found') && str_contains($body, '<title>Page Not Found | Aviate with Isaac</title>'), '404 page is rendered in the layout');
+check(str_contains($body, 'Page not found.') && str_contains($body, '<title>Aviate with Isaac | Page Not Found</title>'), '404 page is rendered in the layout');
 
 // The real app routes are registered.
 $app = app_router();

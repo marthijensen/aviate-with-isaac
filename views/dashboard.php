@@ -4,6 +4,13 @@
  * @var string|null $upcomingLessonsError
  */
 ?>
-<h1 class="page-title">Dashboard</h1>
+<h1>Today at Aviate.</h1>
+<p class="lead">Your next scheduled lessons.</p>
 
-<?php require __DIR__ . '/upcoming-lessons.php'; ?>
+<?php if (!empty($upcomingLessonsError)): ?>
+  <p class="action-note" role="alert"><?= e($upcomingLessonsError) ?></p>
+<?php endif; ?>
+
+<section class="fields-grid" aria-label="Dashboard">
+  <?php require __DIR__ . '/upcoming-lessons.php'; ?>
+</section>

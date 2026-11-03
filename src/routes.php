@@ -13,6 +13,12 @@ function app_router(): Router
         redirect('/dashboard');
     });
 
+    // The shared stylesheet lives at the repo root, next to aviate-app.html.
+    $router->get('/app.css', static function (): void {
+        header('Content-Type: text/css; charset=UTF-8');
+        readfile(dirname(__DIR__) . '/app.css');
+    });
+
     $router->get('/dashboard', static function (): void {
         $upcomingLessons = [];
         $upcomingLessonsError = null;

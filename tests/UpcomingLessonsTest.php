@@ -41,8 +41,8 @@ $rows = [
 $result = UpcomingLessons::prepare($rows, $now, $utc);
 check(array_column($result, 'id') === ['a', 'b', 'c'], 'multiple upcoming lessons are sorted soonest first');
 check($result[0]['student_name'] === 'Ava Lee', 'student name is displayed');
-check($result[0]['date'] === 'Tue, Oct 6, 2026', 'lesson date is formatted');
-check($result[0]['time'] === '4:00 PM UTC', 'lesson time is formatted');
+check($result[0]['date'] === 'Tue 10/6', 'lesson date is formatted');
+check($result[0]['time'] === '4:00 PM', 'lesson time is formatted');
 check($result[1]['lesson_type'] === 'Ground', 'lesson type is formatted');
 
 // Past, completed and cancelled lessons do not appear.
@@ -59,8 +59,8 @@ check(array_column($result, 'id') === ['future'], 'completed, cancelled and past
 // Times are shown in the instructor's time zone.
 $denver = new DateTimeZone('America/Denver');
 $result = UpcomingLessons::prepare([lesson('x', '2026-10-07T15:00:00Z')], $now, $denver);
-check($result[0]['time'] === '9:00 AM MDT', 'time is converted to the display time zone');
-check($result[0]['date'] === 'Wed, Oct 7, 2026', 'date is converted to the display time zone');
+check($result[0]['time'] === '9:00 AM', 'time is converted to the display time zone');
+check($result[0]['date'] === 'Wed 10/7', 'date is converted to the display time zone');
 
 // Missing student data is handled.
 $result = UpcomingLessons::prepare([lesson('x', '2026-10-07T15:00:00Z', student: null)], $now, $utc);
@@ -72,14 +72,14 @@ $html = renderCard([]);
 check(str_contains($html, 'No upcoming lessons scheduled.'), 'empty state is shown when no lessons exist');
 
 // Rendered card lists lessons and escapes output.
-$html = renderCard([['id' => '1', 'student_name' => '<b>Eve</b>', 'date' => 'Tue, Oct 6, 2026', 'time' => '4:00 PM UTC', 'lesson_type' => 'Flight']]);
+$html = renderCard([['id' => '1', 'student_name' => '<b>Eve</b>', 'date' => 'Tue 10/6', 'time' => '4:00 PM', 'lesson_type' => 'Flight']]);
 check(str_contains($html, '&lt;b&gt;Eve&lt;/b&gt;') && !str_contains($html, '<b>Eve</b>'), 'student name is HTML-escaped');
-check(str_contains($html, 'Tue, Oct 6, 2026') && str_contains($html, '4:00 PM UTC'), 'card shows date and time');
+check(str_contains($html, 'Tue 10/6') && str_contains($html, '4:00 PM'), 'card shows date and time');
 check(!str_contains($html, 'No upcoming lessons scheduled.'), 'empty state is hidden when lessons exist');
 
-// Errors are shown instead of the table.
+// On a load error the card says so instead of claiming nothing is scheduled.
 $html = renderCard([], 'Upcoming lessons could not be loaded.');
-check(str_contains($html, 'role="alert"') && !str_contains($html, 'No upcoming lessons'), 'load error is shown');
+check(str_contains($html, 'Upcoming lessons are unavailable.') && !str_contains($html, 'No upcoming lessons'), 'load error is shown');
 
 echo PHP_EOL . ($failures === 0 ? 'All tests passed.' : "{$failures} test(s) failed.") . PHP_EOL;
 exit($failures === 0 ? 0 : 1);
