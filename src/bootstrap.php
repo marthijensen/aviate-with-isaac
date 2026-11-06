@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Env.php';
+require_once __DIR__ . '/ReadOnlyDatabase.php';
+require_once __DIR__ . '/WriteDatabase.php';
 require_once __DIR__ . '/SupabaseClient.php';
 require_once __DIR__ . '/UpcomingLessons.php';
 require_once __DIR__ . '/Router.php';

@@ -70,7 +70,7 @@ $upcomingAppointments = supabaseRequest(
 
 <main class="student-profile-container">
 
-    <a class="back-link" href="preview.html">
+    <a class="back-link" href="students.php">
         ← Back to Students
     </a>
 
@@ -168,17 +168,17 @@ $upcomingAppointments = supabaseRequest(
         <div class="progress-grid">
 
             <div class="progress-card">
-                <span class="progress-number">32</span>
+                <span class="progress-number">-</span>
                 <span>Flight Hours</span>
             </div>
 
             <div class="progress-card">
-                <span class="progress-number">8</span>
+                <span class="progress-number">-</span>
                 <span>Completed Requirements</span>
             </div>
 
             <div class="progress-card">
-                <span class="progress-number">3</span>
+                <span class="progress-number">-</span>
                 <span>Skills Needing Practice</span>
             </div>
 
@@ -199,19 +199,9 @@ $upcomingAppointments = supabaseRequest(
     <div class="table">
 
         <div class="table-header">
-            
-<span>
-    <?= htmlspecialchars($lesson['apointment_date'] ?? 'No date') ?>
-</span>
-
-<span>
-    <?= htmlspecialchars($lesson['appointment_type'] ?? 'No type') ?>
-</span>
-
-<span>
-    <?= htmlspecialchars($lesson['status'] ?? 'Unknown') ?>
-</span>
-
+            <span>Date</span>
+            <span>Type</span>
+            <span>Status</span>
         </div>
 
         <?php if (empty($recentLessons)): ?>
@@ -226,7 +216,7 @@ $upcomingAppointments = supabaseRequest(
 
                 <div class="table-row">
 
-         
+
 <span>
     <?= htmlspecialchars($lesson['apointment_date'] ?? 'No date') ?>
 </span>
@@ -268,28 +258,27 @@ $upcomingAppointments = supabaseRequest(
                 <span>Time</span>
                 <span>Type</span>
             </div>
-
             <?php foreach ($upcomingAppointments as $appointment): ?>
+            <div class="table-row">
 
-                <div class="table-row">
+            <span>
+                <?= htmlspecialchars($appointment['apointment_date'] ?? 'No date') ?>
+            </span>
 
-                    <span>
-                        <?= htmlspecialchars($appointment['date']) ?>
-                    </span>
+            <span>
+                <?= htmlspecialchars($appointment['start_time'] ?? 'Time TBD') ?>
+            </span>
 
-                    <span>
-                        <?= htmlspecialchars($appointment['time']) ?>
-                    </span>
-
-                    <span>
-                        <?= htmlspecialchars($appointment['type']) ?>
-                    </span>
-
-                </div>
-
-            <?php endforeach; ?>
+            <span>
+                <?= htmlspecialchars($appointment['apointment_type'] ?? 'No type') ?>
+            </span>
 
         </div>
+
+    <?php endforeach; ?>
+
+
+    </div>
 
     </section>
 

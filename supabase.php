@@ -84,10 +84,7 @@ function supabaseRequest($endpoint, $method = 'GET', $body = null)
         CURLINFO_HTTP_CODE
     );
 
-feature/student-list-navigation
 
-
-main
     if ($statusCode >= 400) {
         throw new Exception(
             'Supabase returned HTTP '
