@@ -185,5 +185,12 @@ function app_router(): Router
         ]);
     });
 
+    // Display the Schedule Lesson page.
+    $router->get('/schedule', static function (): void {
+        render('schedule', [
+            'title' => 'Schedule Lesson',
+        ]);
+    });
+
     return $router;
 }

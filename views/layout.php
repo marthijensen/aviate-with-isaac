@@ -51,6 +51,10 @@
                   Students
               </a>
 
+              <a href="/schedule"<?= $currentPath === '/schedule' ? ' class="active" aria-current="page"' : '' ?>>
+                  Schedule
+              </a>
+              
           </nav>
       </aside>
 
