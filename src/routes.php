@@ -62,6 +62,10 @@ function app_router(): Router
         $student = null;
         $error = null;
 
+        $recentLessons = [];
+        $upcomingAppointments = [];
+        $appointmentsError = null;
+
         $id = $_GET['id'] ?? null;
 
         if (!is_string($id) || !ctype_digit($id) || (int) $id < 1) {
@@ -80,6 +84,35 @@ function app_router(): Router
                     $error = 'Student not found.';
                 } else {
                     $student = $results[0];
+
+                    try {
+                        $today = (new DateTimeImmutable('now', app_timezone()))
+                            ->format('Y-m-d');
+
+                        // Retrieve the five most recent appointments before today.
+                        $recentLessons = supabase()->select('appointments', [
+                            'select' => 'id,apointment_date,start_time,apointment_type,status',
+                            'student_id' => 'eq.' . $id,
+                            'apointment_date' => 'lt.' . $today,
+                            'order' => 'apointment_date.desc,start_time.desc',
+                            'limit' => '5',
+                        ]);
+
+                        // Retrieve the next five scheduled appointments.
+                        $upcomingAppointments = supabase()->select('appointments', [
+                            'select' => 'id,apointment_date,start_time,apointment_type,status',
+                            'student_id' => 'eq.' . $id,
+                            'apointment_date' => 'gte.' . $today,
+                            'status' => 'eq.scheduled',
+                            'order' => 'apointment_date.asc,start_time.asc',
+                            'limit' => '5',
+                        ]);
+
+                    } catch (RuntimeException $exception) {
+                        error_log('Student appointments: ' . $exception->getMessage());
+                        $appointmentsError = 'Appointments could not be loaded.';
+                    }
+
                 }
             } catch (RuntimeException $exception) {
                 error_log('Student profile: ' . $exception->getMessage());
@@ -92,6 +125,9 @@ function app_router(): Router
             'title' => 'Student Profile',
             'student' => $student,
             'error' => $error,
+            'recentLessons' => $recentLessons,
+            'upcomingAppointments' => $upcomingAppointments,
+            'appointmentsError' => $appointmentsError,
         ]);
     });
 
