@@ -37,5 +37,11 @@ function app_router(): Router
         ]);
     });
 
+    $router->get('/students', static function (): void {
+        render('students', [
+            'title' => 'Students',
+        ]);
+    });
+
     return $router;
 }

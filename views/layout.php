@@ -41,9 +41,17 @@
 
     <div class="app-shell">
       <aside class="sidebar">
-        <nav class="side-nav" aria-label="App navigation">
-          <a href="/dashboard"<?= $currentPath === '/dashboard' ? ' class="active" aria-current="page"' : '' ?>>Dashboard</a>
-        </nav>
+          <nav class="side-nav" aria-label="App navigation">
+
+              <a href="/dashboard"<?= $currentPath === '/dashboard' ? ' class="active" aria-current="page"' : '' ?>>
+                  Dashboard
+              </a>
+
+              <a href="/students"<?= $currentPath === '/students' ? ' class="active" aria-current="page"' : '' ?>>
+                  Students
+              </a>
+
+          </nav>
       </aside>
 
       <main class="main-display">
