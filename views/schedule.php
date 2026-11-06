@@ -9,6 +9,15 @@
     <article class="field-card">
 
         <h2>Lesson Details</h2>
+        <?php if ($studentOptionsError !== null): ?>
+            <p class="action-note" role="alert">
+                <?= e($studentOptionsError) ?>
+            </p>
+        <?php elseif ($studentOptions === []): ?>
+            <p class="action-note">
+                No active students are available for scheduling.
+            </p>
+        <?php endif; ?>
 
         <?php if ($preview): ?>
             <p class="action-note" role="status">
@@ -30,17 +39,41 @@
             <div class="field-grid">
 
                 <label class="span-2" for="student_id">
-                    Student ID *
-                    <input
+                    Student *
+
+                    <select
                         class="field-input"
-                        type="number"
                         id="student_id"
                         name="student_id"
-                        min="1"
                         required
-                        placeholder="Temporary test ID"
-                        value="<?= e($fields['student_id'] ?? '') ?>"
+                        <?= ($studentOptionsError !== null || $studentOptions === [])
+                            ? 'disabled' : '' ?>
                     >
+                        <option value="">Select a student</option>
+
+                        <?php foreach ($studentOptions as $option): ?>
+
+                            <?php
+                                $optionId = (string) $option['id'];
+
+                                $studentName = trim(
+                                    (string) $option['first_name']
+                                    . ' '
+                                    . (string) $option['last_name']
+                                );
+                            ?>
+
+                            <option
+                                value="<?= e($optionId) ?>"
+                                <?= ($fields['student_id'] ?? '') === $optionId
+                                    ? 'selected' : '' ?>
+                            >
+                                <?= e($studentName) ?>
+                            </option>
+
+                        <?php endforeach; ?>
+
+                    </select>
                 </label>
 
                 <label class="span-2" for="lesson_type">

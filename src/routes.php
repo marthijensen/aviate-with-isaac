@@ -295,13 +295,34 @@ function app_router(): Router
 
     // Display the Schedule Lesson form.
     $router->get('/schedule', static function (): void {
+        $studentOptions = [];
+        $studentOptionsError = null;
+
+        try {
+            $db = ReadOnlyDatabase::connect();
+
+            $studentOptions = $db->query(
+                "SELECT id, first_name, last_name
+                FROM public.students
+                WHERE status = 'active'
+                ORDER BY last_name ASC, first_name ASC"
+            )->fetchAll();
+
+        } catch (Throwable $exception) {
+            error_log('Schedule students: ' . $exception->getMessage());
+            $studentOptionsError = 'Student list could not be loaded.';
+        }
+
         render('schedule', [
             'title' => 'Schedule Lesson',
             'fields' => [],
             'errors' => [],
             'preview' => false,
+            'studentOptions' => $studentOptions,
+            'studentOptionsError' => $studentOptionsError,
         ]);
     });
+
 
     // Validate a lesson without saving it to Supabase.
     $router->post('/schedule', static function (): void {
@@ -354,7 +375,45 @@ function app_router(): Router
             $errors[] = 'Please enter a valid start time.';
         }
 
-        if ($errors !== []) {
+
+        $studentOptions = [];
+        $studentOptionsError = null;
+
+        try {
+            $db = ReadOnlyDatabase::connect();
+
+            $studentOptions = $db->query(
+                "SELECT id, first_name, last_name
+                FROM public.students
+                WHERE status = 'active'
+                ORDER BY last_name ASC, first_name ASC"
+            )->fetchAll();
+
+            // Verify the selected student is actually active.
+            if (ctype_digit($fields['student_id'])
+                && (int) $fields['student_id'] > 0) {
+
+                $validIds = array_map(
+                    static fn (array $student): string =>
+                        (string) $student['id'],
+                    $studentOptions
+                );
+
+                if (!in_array($fields['student_id'], $validIds, true)) {
+                    $errors[] = 'Please select an active student.';
+                }
+            }
+
+        } catch (Throwable $exception) {
+            error_log('Schedule students: ' . $exception->getMessage());
+
+            $studentOptionsError = 'Student list could not be loaded.';
+            $errors[] = 'Student selection could not be verified.';
+        }
+
+        if ($studentOptionsError !== null) {
+            http_response_code(503);
+        } elseif ($errors !== []) {
             http_response_code(422);
         }
 
@@ -363,6 +422,8 @@ function app_router(): Router
             'fields' => $fields,
             'errors' => $errors,
             'preview' => $errors === [],
+            'studentOptions' => $studentOptions,
+            'studentOptionsError' => $studentOptionsError,
         ]);
     });
 
