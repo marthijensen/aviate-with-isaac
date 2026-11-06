@@ -37,9 +37,23 @@ function app_router(): Router
         ]);
     });
 
+    
     $router->get('/students', static function (): void {
+        $students = null;
+
+        try {
+            $students = supabase()->select('students', [
+                'select' => 'id,first_name,last_name,created_at,status',
+                'status' => 'eq.active',
+                'order' => 'created_at.asc',
+            ]);
+        } catch (RuntimeException $exception) {
+            error_log('Student list: ' . $exception->getMessage());
+        }
+
         render('students', [
             'title' => 'Students',
+            'students' => $students,
         ]);
     });
 
