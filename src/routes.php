@@ -57,5 +57,43 @@ function app_router(): Router
         ]);
     });
 
+
+    $router->get('/students/profile', static function (): void {
+        $student = null;
+        $error = null;
+
+        $id = $_GET['id'] ?? null;
+
+        if (!is_string($id) || !ctype_digit($id) || (int) $id < 1) {
+            http_response_code(400);
+            $error = 'A valid student ID is required.';
+        } else {
+            try {
+                $results = supabase()->select('students', [
+                    'select' => 'id,first_name,last_name,email,phone,training_goal,status,created_at',
+                    'id' => 'eq.' . $id,
+                    'limit' => '1',
+                ]);
+
+                if ($results === []) {
+                    http_response_code(404);
+                    $error = 'Student not found.';
+                } else {
+                    $student = $results[0];
+                }
+            } catch (RuntimeException $exception) {
+                error_log('Student profile: ' . $exception->getMessage());
+                http_response_code(503);
+                $error = 'Student information is currently unavailable.';
+            }
+        }
+
+        render('student-profile', [
+            'title' => 'Student Profile',
+            'student' => $student,
+            'error' => $error,
+        ]);
+    });
+
     return $router;
 }

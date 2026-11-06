@@ -47,7 +47,7 @@
                   Dashboard
               </a>
 
-              <a href="/students"<?= $currentPath === '/students' ? ' class="active" aria-current="page"' : '' ?>>
+              <a href="/students"<?= str_starts_with($currentPath, '/students')? ' class="active" aria-current="page"' : '' ?>>
                   Students
               </a>
 

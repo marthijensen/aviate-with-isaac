@@ -40,6 +40,9 @@ $students = $students ?? null;
                                     . (string) ($student['last_name'] ?? '')
                                 )) ?>
                             </strong>
+                            <a href="/students/profile?id=<?= rawurlencode((string) $student['id']) ?>">
+                                View Profile
+                            </a>
                         </span>
                     </li>
 
