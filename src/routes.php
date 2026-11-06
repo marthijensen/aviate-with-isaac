@@ -23,12 +23,56 @@ function app_router(): Router
         $upcomingLessons = [];
         $upcomingLessonsError = null;
 
-        try {
-            $upcomingLessons = UpcomingLessons::fetch(supabase(), new DateTimeImmutable('now'), app_timezone());
-        } catch (RuntimeException $exception) {
-            error_log('Upcoming lessons: ' . $exception->getMessage());
-            $upcomingLessonsError = 'Upcoming lessons could not be loaded. Please try again later.';
-        }
+            try {
+                $db = ReadOnlyDatabase::connect();
+
+                $zone = app_timezone();
+                $now = new DateTimeImmutable('now', $zone);
+                $today = $now->format('Y-m-d');
+
+                // Retrieve appointments from today onward.
+                $statement = $db->prepare(
+                    'SELECT
+                        id,
+                        student_id,
+                        apointment_date,
+                        start_time,
+                        apointment_type,
+                        status
+                    FROM public.appointments
+                    WHERE apointment_date >= :today
+                    ORDER BY apointment_date ASC, start_time ASC'
+                );
+
+                $statement->execute([
+                    'today' => $today,
+                ]);
+
+                $appointments = $statement->fetchAll();
+
+                // Retrieve student names for the appointment cards.
+                $students = $db->query(
+                    'SELECT id, first_name, last_name
+                    FROM public.students'
+                )->fetchAll();
+
+                // Reuse Sangchun's existing lesson formatting logic.
+                $upcomingLessons = UpcomingLessons::prepare(
+                    $appointments,
+                    $students,
+                    $now,
+                    $zone
+                );
+
+            } catch (Throwable $exception) {
+                error_log(
+                    'Upcoming lessons: ' . $exception->getMessage()
+                );
+
+                $upcomingLessonsError =
+                    'Upcoming lessons could not be loaded. Please try again later.';
+            }
+
 
         render('dashboard', [
             'title' => 'Dashboard',
