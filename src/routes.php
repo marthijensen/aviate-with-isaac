@@ -38,17 +38,34 @@ function app_router(): Router
     });
 
     
+
     $router->get('/students', static function (): void {
         $students = null;
 
         try {
-            $students = supabase()->select('students', [
-                'select' => 'id,first_name,last_name,created_at,status',
-                'status' => 'eq.active',
-                'order' => 'created_at.asc',
-            ]);
-        } catch (RuntimeException $exception) {
-            error_log('Student list: ' . $exception->getMessage());
+            // Connect using Marthi's read-only database account.
+            $db = ReadOnlyDatabase::connect();
+
+            // Retrieve active students, oldest first.
+            $statement = $db->query(
+                "SELECT
+                    id,
+                    first_name,
+                    last_name,
+                    created_at,
+                    status
+                 FROM public.students
+                 WHERE status = 'active'
+                 ORDER BY created_at ASC"
+            );
+
+            $students = $statement->fetchAll();
+
+        } catch (Throwable $exception) {
+            error_log(
+                'Student list database error: '
+                . $exception->getMessage()
+            );
         }
 
         render('students', [
@@ -56,6 +73,7 @@ function app_router(): Router
             'students' => $students,
         ]);
     });
+
 
 
     $router->get('/students/profile', static function (): void {
@@ -73,47 +91,93 @@ function app_router(): Router
             $error = 'A valid student ID is required.';
         } else {
             try {
-                $results = supabase()->select('students', [
-                    'select' => 'id,first_name,last_name,email,phone,training_goal,status,created_at',
-                    'id' => 'eq.' . $id,
-                    'limit' => '1',
-                ]);
+                    $db = ReadOnlyDatabase::connect();
 
-                if ($results === []) {
-                    http_response_code(404);
-                    $error = 'Student not found.';
-                } else {
-                    $student = $results[0];
+                    $statement = $db->prepare(
+                        'SELECT
+                            id,
+                            first_name,
+                            last_name,
+                            email,
+                            phone,
+                            training_goal,
+                            status,
+                            created_at
+                        FROM public.students
+                        WHERE id = :student_id
+                        LIMIT 1'
+                    );
 
-                    try {
-                        $today = (new DateTimeImmutable('now', app_timezone()))
-                            ->format('Y-m-d');
+                    $statement->execute([
+                        'student_id' => $id,
+                    ]);
 
-                        // Retrieve the five most recent appointments before today.
-                        $recentLessons = supabase()->select('appointments', [
-                            'select' => 'id,apointment_date,start_time,apointment_type,status',
-                            'student_id' => 'eq.' . $id,
-                            'apointment_date' => 'lt.' . $today,
-                            'order' => 'apointment_date.desc,start_time.desc',
-                            'limit' => '5',
-                        ]);
+                    $studentRow = $statement->fetch();
 
-                        // Retrieve the next five scheduled appointments.
-                        $upcomingAppointments = supabase()->select('appointments', [
-                            'select' => 'id,apointment_date,start_time,apointment_type,status',
-                            'student_id' => 'eq.' . $id,
-                            'apointment_date' => 'gte.' . $today,
-                            'status' => 'eq.scheduled',
-                            'order' => 'apointment_date.asc,start_time.asc',
-                            'limit' => '5',
-                        ]);
+                    if ($studentRow === false) {
+                        http_response_code(404);
+                        $error = 'Student not found.';
+                    } else {
+                        $student = $studentRow;
+                        try {
+                            $today = (new DateTimeImmutable('now', app_timezone()))
+                                ->format('Y-m-d');
 
-                    } catch (RuntimeException $exception) {
-                        error_log('Student appointments: ' . $exception->getMessage());
-                        $appointmentsError = 'Appointments could not be loaded.';
+                            // Get the student's five most recent past appointments.
+                            $recentStatement = $db->prepare(
+                                'SELECT
+                                    id,
+                                    apointment_date,
+                                    start_time,
+                                    apointment_type,
+                                    status
+                                FROM public.appointments
+                                WHERE student_id = :student_id
+                                AND apointment_date < :today
+                                ORDER BY apointment_date DESC, start_time DESC
+                                LIMIT 5'
+                            );
+
+                            $recentStatement->execute([
+                                'student_id' => $id,
+                                'today' => $today,
+                            ]);
+
+                            $recentLessons = $recentStatement->fetchAll();
+
+                            // Get the student's next five scheduled appointments.
+                            $upcomingStatement = $db->prepare(
+                                "SELECT
+                                    id,
+                                    apointment_date,
+                                    start_time,
+                                    apointment_type,
+                                    status
+                                FROM public.appointments
+                                WHERE student_id = :student_id
+                                AND apointment_date >= :today
+                                AND status = 'scheduled'
+                                ORDER BY apointment_date ASC, start_time ASC
+                                LIMIT 5"
+                            );
+
+                            $upcomingStatement->execute([
+                                'student_id' => $id,
+                                'today' => $today,
+                            ]);
+
+                            $upcomingAppointments = $upcomingStatement->fetchAll();
+
+                        } catch (Throwable $exception) {
+                            error_log(
+                                'Student appointments: ' . $exception->getMessage()
+                            );
+
+                            $recentLessons = [];
+                            $upcomingAppointments = [];
+                            $appointmentsError = 'Appointments could not be loaded.';
+                        }
                     }
-
-                }
             } catch (RuntimeException $exception) {
                 error_log('Student profile: ' . $exception->getMessage());
                 http_response_code(503);
