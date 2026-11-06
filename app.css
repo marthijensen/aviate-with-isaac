@@ -375,3 +375,17 @@ textarea.field-input { min-height: 144px; resize: vertical; }
 .actions a:hover {
     background: var(--gold-soft);
 }
+
+
+.financial-report {
+    width: 100%;
+    min-width: 0;
+}
+
+.financial-report iframe {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-height: 720px;
+    border: 0;
+}

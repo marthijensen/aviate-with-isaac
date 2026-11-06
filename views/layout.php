@@ -54,7 +54,13 @@
               <a href="/schedule"<?= $currentPath === '/schedule' ? ' class="active" aria-current="page"' : '' ?>>
                   Schedule
               </a>
-              
+
+              <a href="/financials"<?= $currentPath === '/financials'
+                  ? ' class="active" aria-current="page"'
+                  : '' ?>>
+                  Financials
+              </a>
+
           </nav>
       </aside>
 

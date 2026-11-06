@@ -477,5 +477,11 @@ function app_router(): Router
     });
 
 
+    $router->get('/financials', static function (): void {
+        render('financials', [
+            'title' => 'Financial Dashboard',
+        ]);
+    });
+
     return $router;
 }
