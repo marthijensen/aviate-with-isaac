@@ -241,19 +241,78 @@ function app_router(): Router
 
     // Display the Add Student form.
     $router->get('/students/add', static function (): void {
+
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        if (empty($_SESSION['add_student_csrf'])) {
+            $_SESSION['add_student_csrf'] = bin2hex(random_bytes(32));
+        }
+
+        $courseOptions = [];
+        $courseOptionsError = null;
+
+        try {
+            $db = ReadOnlyDatabase::connect();
+
+            $courseOptions = $db->query(
+                "SELECT course_id, course
+                FROM public.course
+                ORDER BY course_id ASC"
+            )->fetchAll(PDO::FETCH_ASSOC);
+
+        } catch (Throwable $exception) {
+            error_log('Add Student courses: ' . $exception->getMessage());
+            $courseOptionsError = 'Courses could not be loaded.';
+        }
+
         render('add-student', [
             'title' => 'Add Student',
             'fields' => [],
             'errors' => [],
             'preview' => false,
+            'courseOptions' => $courseOptions,
+            'courseOptionsError' => $courseOptionsError,
         ]);
     });
 
-    // Validate the form without saving to the database.
+    // Validate the form
     $router->post('/students/add', static function (): void {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        // Reject requests outside explicitly enabled local development.
+        $remoteAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+
+        if (
+            Env::get('AVIATE_LOCAL_WRITES', '0') !== '1'
+            || !in_array($remoteAddress, ['127.0.0.1', '::1'], true)
+        ) {
+            http_response_code(403);
+            echo 'Student creation is disabled in this environment.';
+            return;
+        }
+
+        // Verify the request came from our form.
+        $submittedToken = $_POST['csrf_token'] ?? '';
+        $expectedToken = $_SESSION['add_student_csrf'] ?? '';
+
+        if (
+            !is_string($submittedToken)
+            || !is_string($expectedToken)
+            || $expectedToken === ''
+            || !hash_equals($expectedToken, $submittedToken)
+        ) {
+            http_response_code(403);
+            echo 'Invalid form token. Refresh the page and try again.';
+            return;
+        }
+
         $names = [
             'first_name', 'last_name', 'email', 'phone',
-            'address', 'city', 'state', 'zip', 'training_goal',
+            'address', 'city', 'state', 'zip', 'course_id',
         ];
 
         $fields = [];
@@ -277,24 +336,126 @@ function app_router(): Router
             $errors[] = 'A valid email address is required.';
         }
 
-        if ($fields['training_goal'] === '') {
-            $errors[] = 'Training goal is required.';
+        if ($fields['course_id'] === '') {
+            $errors[] = 'Please select a course.';
         }
 
-        if ($errors !== []) {
+        $courseOptions = [];
+        $courseOptionsError = null;
+
+        try {
+            $db = ReadOnlyDatabase::connect();
+
+            $courseOptions = $db->query(
+                "SELECT course_id, course
+                FROM public.course
+                ORDER BY course_id ASC"
+            )->fetchAll(PDO::FETCH_ASSOC);
+
+        } catch (Throwable $exception) {
+            error_log('Add Student courses: ' . $exception->getMessage());
+            $courseOptionsError = 'Courses could not be loaded.';
+        }
+
+        if ($courseOptionsError === null && $fields['course_id'] !== '') {
+            $validCourseIds = array_map(
+                static fn(array $course): string =>
+                    (string) $course['course_id'],
+                $courseOptions
+            );
+
+            if (!in_array($fields['course_id'], $validCourseIds, true)) {
+                $errors[] = 'Please select a valid course.';
+            }
+        }
+
+        if ($courseOptionsError !== null) {
+            http_response_code(503);
+        } elseif ($errors !== []) {
             http_response_code(422);
+        }
+
+        if ($errors === [] && $courseOptionsError === null) {
+            try {
+                $db = WriteDatabase::connect();
+
+                $statement = $db->prepare(
+                    "INSERT INTO public.students (
+                        first_name,
+                        last_name,
+                        email,
+                        phone,
+                        address,
+                        city,
+                        state,
+                        zip,
+                        course_id
+                    ) VALUES (
+                        :first_name,
+                        :last_name,
+                        :email,
+                        :phone,
+                        :address,
+                        :city,
+                        :state,
+                        :zip,
+                        :course_id
+                    )"
+                );
+
+                $statement->execute([
+                    'first_name' => $fields['first_name'],
+                    'last_name' => $fields['last_name'],
+                    'email' => $fields['email'],
+                    'phone' => $fields['phone'],
+                    'address' => $fields['address'],
+                    'city' => $fields['city'],
+                    'state' => $fields['state'],
+                    'zip' => $fields['zip'],
+                    'course_id' => (int) $fields['course_id'],
+                ]);
+
+                if ($statement->rowCount() !== 1) {
+                    throw new RuntimeException(
+                        'Student INSERT did not create exactly one row.'
+                    );
+                }
+
+                // Redirect after saving to avoid duplicate submissions.
+                header('Location: /students', true, 303);
+                return;
+
+            } catch (Throwable $exception) {
+                error_log(
+                    'Add Student INSERT failed: '
+                    . $exception->getMessage()
+                );
+
+                $errors[] = 'Student could not be saved. Please try again.';
+                http_response_code(500);
+            }
         }
 
         render('add-student', [
             'title' => 'Add Student',
             'fields' => $fields,
             'errors' => $errors,
-            'preview' => $errors === [],
+            'preview' => false,
+            'courseOptions' => $courseOptions,
+            'courseOptionsError' => $courseOptionsError,
         ]);
     });
 
     // Display the Schedule Lesson form.
     $router->get('/schedule', static function (): void {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        if (empty($_SESSION['schedule_csrf'])) {
+            $_SESSION['schedule_csrf'] = bin2hex(random_bytes(32));
+        }
+
         $studentOptions = [];
         $studentOptionsError = null;
 
@@ -344,9 +505,39 @@ function app_router(): Router
         ]);
     });
 
-
-    // Validate a lesson without saving it to Supabase.
+    // Validate a lesson
     $router->post('/schedule', static function (): void {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        // Permit writes only during explicitly enabled local testing.
+        $remoteAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+
+        if (
+            Env::get('AVIATE_LOCAL_WRITES', '0') !== '1'
+            || !in_array($remoteAddress, ['127.0.0.1', '::1'], true)
+        ) {
+            http_response_code(403);
+            echo 'Lesson scheduling is disabled in this environment.';
+            return;
+        }
+
+        // Verify the form's CSRF token.
+        $submittedToken = $_POST['csrf_token'] ?? '';
+        $expectedToken = $_SESSION['schedule_csrf'] ?? '';
+
+        if (
+            !is_string($submittedToken)
+            || !is_string($expectedToken)
+            || $expectedToken === ''
+            || !hash_equals($expectedToken, $submittedToken)
+        ) {
+            http_response_code(403);
+            echo 'Invalid form token. Refresh the page and try again.';
+            return;
+        }
+
         $names = [
             'student_id',
             'lesson_type',
@@ -395,7 +586,6 @@ function app_router(): Router
         )) {
             $errors[] = 'Please enter a valid start time.';
         }
-
 
         $studentOptions = [];
         $studentOptionsError = null;
@@ -464,11 +654,69 @@ function app_router(): Router
             http_response_code(422);
         }
 
+        if (
+            $errors === []
+            && $studentOptionsError === null
+            && $lessonOptionsError === null
+        ) {
+            try {
+                $db = WriteDatabase::connect();
+
+                $statement = $db->prepare(
+                    "INSERT INTO public.appointments (
+                        student_id,
+                        apointment_date,
+                        start_time,
+                        apointment_type,
+                        status
+                    ) VALUES (
+                        :student_id,
+                        :apointment_date,
+                        :start_time,
+                        :apointment_type,
+                        :status
+                    )"
+                );
+
+                $statement->execute([
+                    'student_id' => (int) $fields['student_id'],
+                    'apointment_date' => $fields['appointment_date'],
+                    'start_time' => $fields['start_time'],
+                    'apointment_type' => $fields['lesson_type'],
+                    'status' => 'scheduled',
+                ]);
+
+                if ($statement->rowCount() !== 1) {
+                    throw new RuntimeException(
+                        'Appointment INSERT did not create exactly one row.'
+                    );
+                }
+
+                // Open the student's profile after saving.
+                header(
+                    'Location: /students/profile?id='
+                        . (int) $fields['student_id'],
+                    true,
+                    303
+                );
+                return;
+
+            } catch (Throwable $exception) {
+                error_log(
+                    'Schedule Lesson INSERT failed: '
+                    . $exception->getMessage()
+                );
+
+                $errors[] = 'Lesson could not be saved. Please try again.';
+                http_response_code(500);
+            }
+        }
+
         render('schedule', [
             'title' => 'Schedule Lesson',
             'fields' => $fields,
             'errors' => $errors,
-            'preview' => $errors === [],
+            'preview' => false,
             'studentOptions' => $studentOptions,
             'studentOptionsError' => $studentOptionsError,
             'lessonOptions' => $lessonOptions,

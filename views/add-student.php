@@ -11,13 +11,6 @@
 <section class="fields-grid">
     <article class="field-card">
 
-        <?php if ($preview): ?>
-            <p role="status">
-                Student information validated successfully.
-                This is a preview only — nothing has been saved.
-            </p>
-        <?php endif; ?>
-
         <?php if ($errors !== []): ?>
             <div role="alert">
                 <?php foreach ($errors as $message): ?>
@@ -26,7 +19,24 @@
             </div>
         <?php endif; ?>
 
+
+        <?php if ($courseOptionsError !== null): ?>
+            <p class="action-note" role="alert">
+                <?= e($courseOptionsError) ?>
+            </p>
+        <?php elseif ($courseOptions === []): ?>
+            <p class="action-note">
+                No courses are available.
+            </p>
+        <?php endif; ?>
+
         <form method="post" action="/students/add">
+
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="<?= e((string) ($_SESSION['add_student_csrf'] ?? '')) ?>"
+            >
 
             <h2>Student Information</h2>
 
@@ -58,18 +68,30 @@
             </p>
 
             <p>
-                <label for="training_goal">Training Goal *</label>
-                <input id="training_goal" name="training_goal"
-                       required
-                       list="training-goals"
-                       value="<?= e($fields['training_goal'] ?? '') ?>">
+                <label for="course_id">Course *</label>
 
-                <datalist id="training-goals">
-                    <option value="Private Pilot">
-                    <option value="Instrument Rating">
-                    <option value="Commercial Pilot">
-                    <option value="Certified Flight Instructor">
-                </datalist>
+                <select
+                    class="field-input"
+                    id="course_id"
+                    name="course_id"
+                    required
+                    <?= ($courseOptionsError !== null || $courseOptions === [])
+                        ? 'disabled' : '' ?>
+                >
+                    <option value="">Select a course</option>
+
+                    <?php foreach ($courseOptions as $course): ?>
+                        <option
+                            value="<?= e((string) $course['course_id']) ?>"
+                            <?= (string) ($fields['course_id'] ?? '') ===
+                                (string) $course['course_id']
+                                ? 'selected' : '' ?>
+                        >
+                            <?= e((string) $course['course']) ?>
+                        </option>
+                    <?php endforeach; ?>
+
+                </select>
             </p>
 
             <h2>Address (Optional)</h2>
@@ -93,7 +115,7 @@
             <?php endforeach; ?>
 
             <button type="submit">
-                Validate Student Information
+                Save Student
             </button>
 
         </form>

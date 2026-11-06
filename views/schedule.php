@@ -29,13 +29,6 @@
             </p>
         <?php endif; ?>
 
-        <?php if ($preview): ?>
-            <p class="action-note" role="status">
-                Lesson information validated successfully.
-                This is a preview only — nothing has been saved.
-            </p>
-        <?php endif; ?>
-
         <?php if ($errors !== []): ?>
             <div class="action-note" role="alert">
                 <?php foreach ($errors as $message): ?>
@@ -45,6 +38,11 @@
         <?php endif; ?>
 
         <form method="post" action="/schedule">
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="<?= e((string) ($_SESSION['schedule_csrf'] ?? '')) ?>"
+            >
 
             <div class="field-grid">
 
@@ -147,10 +145,6 @@
             </div>
 
         </form>
-
-        <p>
-            Preview mode: appointments are not saved to Supabase.
-        </p>
 
     </article>
 
