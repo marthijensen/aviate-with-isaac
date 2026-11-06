@@ -358,3 +358,20 @@ textarea.field-input { min-height: 144px; resize: vertical; }
   .main-display { padding: 20px 12px 40px; }
   .app-header { padding-left: 16px; padding-right: 16px; }
 }
+
+/* Dashboard quick-action links */
+.actions a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 10px 16px;
+    background: var(--gold);
+    color: var(--navy-dark);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.actions a:hover {
+    background: var(--gold-soft);
+}
