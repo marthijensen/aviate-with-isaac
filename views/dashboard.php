@@ -8,9 +8,11 @@
 <p class="lead">Your next scheduled lessons.</p>
 
 <div class="actions" aria-label="Dashboard quick actions">
+    <a href="/schedule">Schedule Lesson</a>
     <a href="/students">View Students</a>
     <a href="/students/add">+ Add Student</a>
 </div>
+
 
 <?php if (!empty($upcomingLessonsError)): ?>
   <p class="action-note" role="alert"><?= e($upcomingLessonsError) ?></p>

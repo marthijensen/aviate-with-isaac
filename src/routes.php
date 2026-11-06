@@ -185,12 +185,79 @@ function app_router(): Router
         ]);
     });
 
-    // Display the Schedule Lesson page.
+    // Display the Schedule Lesson form.
     $router->get('/schedule', static function (): void {
         render('schedule', [
             'title' => 'Schedule Lesson',
+            'fields' => [],
+            'errors' => [],
+            'preview' => false,
         ]);
     });
+
+    // Validate a lesson without saving it to Supabase.
+    $router->post('/schedule', static function (): void {
+        $names = [
+            'student_id',
+            'lesson_type',
+            'appointment_date',
+            'start_time',
+        ];
+
+        $fields = [];
+
+        foreach ($names as $name) {
+            $value = $_POST[$name] ?? '';
+            $fields[$name] = is_string($value) ? trim($value) : '';
+        }
+
+        $errors = [];
+
+        // Validate the student ID.
+        if (!ctype_digit($fields['student_id'])
+            || (int) $fields['student_id'] < 1) {
+            $errors[] = 'A valid student ID is required.';
+        }
+
+        // Validate the lesson type.
+        if ($fields['lesson_type'] === '') {
+            $errors[] = 'Please select a lesson type.';
+        }
+
+        // Validate the appointment date.
+        $date = DateTimeImmutable::createFromFormat(
+            '!Y-m-d',
+            $fields['appointment_date'],
+            app_timezone()
+        );
+
+        if ($date === false ||
+            $date->format('Y-m-d') !== $fields['appointment_date']) {
+            $errors[] = 'Please enter a valid appointment date.';
+        } elseif ($date < new DateTimeImmutable('today', app_timezone())) {
+            $errors[] = 'The appointment date cannot be in the past.';
+        }
+
+        // Validate the appointment time.
+        if (!preg_match(
+            '/^([01]\d|2[0-3]):[0-5]\d$/',
+            $fields['start_time']
+        )) {
+            $errors[] = 'Please enter a valid start time.';
+        }
+
+        if ($errors !== []) {
+            http_response_code(422);
+        }
+
+        render('schedule', [
+            'title' => 'Schedule Lesson',
+            'fields' => $fields,
+            'errors' => $errors,
+            'preview' => $errors === [],
+        ]);
+    });
+
 
     return $router;
 }
