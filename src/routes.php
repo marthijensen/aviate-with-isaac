@@ -131,5 +131,59 @@ function app_router(): Router
         ]);
     });
 
+    // Display the Add Student form.
+    $router->get('/students/add', static function (): void {
+        render('add-student', [
+            'title' => 'Add Student',
+            'fields' => [],
+            'errors' => [],
+            'preview' => false,
+        ]);
+    });
+
+    // Validate the form without saving to the database.
+    $router->post('/students/add', static function (): void {
+        $names = [
+            'first_name', 'last_name', 'email', 'phone',
+            'address', 'city', 'state', 'zip', 'training_goal',
+        ];
+
+        $fields = [];
+
+        foreach ($names as $name) {
+            $value = $_POST[$name] ?? '';
+            $fields[$name] = is_string($value) ? trim($value) : '';
+        }
+
+        $errors = [];
+
+        if ($fields['first_name'] === '') {
+            $errors[] = 'First name is required.';
+        }
+
+        if ($fields['last_name'] === '') {
+            $errors[] = 'Last name is required.';
+        }
+
+        if (!filter_var($fields['email'], FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'A valid email address is required.';
+        }
+
+        if ($fields['training_goal'] === '') {
+            $errors[] = 'Training goal is required.';
+        }
+
+        if ($errors !== []) {
+            http_response_code(422);
+        }
+
+        render('add-student', [
+            'title' => 'Add Student',
+            'fields' => $fields,
+            'errors' => $errors,
+            'preview' => $errors === [],
+        ]);
+    });
+
     return $router;
 }

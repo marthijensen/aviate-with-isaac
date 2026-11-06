@@ -11,6 +11,10 @@ $students = $students ?? null;
     View and manage your flight students.
 </p>
 
+<p>
+    <a href="/students/add">+ Add Student</a>
+</p>
+
 <section class="fields-grid">
 
     <article class="field-card">
