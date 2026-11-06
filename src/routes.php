@@ -313,6 +313,25 @@ function app_router(): Router
             $studentOptionsError = 'Student list could not be loaded.';
         }
 
+        $lessonOptions = [];
+        $lessonOptionsError = null;
+
+        try {
+            $db = ReadOnlyDatabase::connect();
+
+            $lessonOptions = $db->query(
+                "SELECT DISTINCT TRIM(lesson_type) AS lesson_type
+                FROM public.lessons
+                WHERE lesson_type IS NOT NULL
+                AND TRIM(lesson_type) <> ''
+                ORDER BY lesson_type ASC"
+            )->fetchAll(PDO::FETCH_COLUMN);
+
+        } catch (Throwable $exception) {
+            error_log('Schedule lesson types: ' . $exception->getMessage());
+            $lessonOptionsError = 'Lesson types could not be loaded.';
+        }
+
         render('schedule', [
             'title' => 'Schedule Lesson',
             'fields' => [],
@@ -320,6 +339,8 @@ function app_router(): Router
             'preview' => false,
             'studentOptions' => $studentOptions,
             'studentOptionsError' => $studentOptionsError,
+            'lessonOptions' => $lessonOptions,
+            'lessonOptionsError' => $lessonOptionsError,
         ]);
     });
 
@@ -411,7 +432,33 @@ function app_router(): Router
             $errors[] = 'Student selection could not be verified.';
         }
 
-        if ($studentOptionsError !== null) {
+
+        $lessonOptions = [];
+        $lessonOptionsError = null;
+
+        try {
+            $db = ReadOnlyDatabase::connect();
+
+            $lessonOptions = $db->query(
+                "SELECT DISTINCT TRIM(lesson_type) AS lesson_type
+                FROM public.lessons
+                WHERE lesson_type IS NOT NULL
+                AND TRIM(lesson_type) <> ''
+                ORDER BY lesson_type ASC"
+            )->fetchAll(PDO::FETCH_COLUMN);
+
+            if ($fields['lesson_type'] !== ''
+                && !in_array($fields['lesson_type'], $lessonOptions, true)) {
+                $errors[] = 'Please select a valid lesson type.';
+            }
+
+        } catch (Throwable $exception) {
+            error_log('Schedule lesson types: ' . $exception->getMessage());
+            $lessonOptionsError = 'Lesson types could not be loaded.';
+            $errors[] = 'Lesson type could not be verified.';
+        }
+
+        if ($studentOptionsError !== null || $lessonOptionsError !== null) {
             http_response_code(503);
         } elseif ($errors !== []) {
             http_response_code(422);
@@ -424,6 +471,8 @@ function app_router(): Router
             'preview' => $errors === [],
             'studentOptions' => $studentOptions,
             'studentOptionsError' => $studentOptionsError,
+            'lessonOptions' => $lessonOptions,
+            'lessonOptionsError' => $lessonOptionsError,
         ]);
     });
 

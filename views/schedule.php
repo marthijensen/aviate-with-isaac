@@ -19,6 +19,16 @@
             </p>
         <?php endif; ?>
 
+        <?php if ($lessonOptionsError !== null): ?>
+            <p class="action-note" role="alert">
+                <?= e($lessonOptionsError) ?>
+            </p>
+        <?php elseif ($lessonOptions === []): ?>
+            <p class="action-note">
+                No lesson types are available for scheduling.
+            </p>
+        <?php endif; ?>
+
         <?php if ($preview): ?>
             <p class="action-note" role="status">
                 Lesson information validated successfully.
@@ -78,26 +88,29 @@
 
                 <label class="span-2" for="lesson_type">
                     Lesson Type *
+
                     <select
                         class="field-input"
                         id="lesson_type"
                         name="lesson_type"
                         required
+                        <?= ($lessonOptionsError !== null || $lessonOptions === [])
+                            ? 'disabled' : '' ?>
                     >
                         <option value="">Select lesson type</option>
 
-                        <?php foreach ([
-                            'Flight Lesson',
-                            'Ground Lesson',
-                        ] as $type): ?>
+                        <?php foreach ($lessonOptions as $type): ?>
 
-                            <option value="<?= e($type) ?>"
+                            <option
+                                value="<?= e((string) $type) ?>"
                                 <?= ($fields['lesson_type'] ?? '') === $type
-                                    ? 'selected' : '' ?>>
-                                <?= e($type) ?>
+                                    ? 'selected' : '' ?>
+                            >
+                                <?= e((string) $type) ?>
                             </option>
 
                         <?php endforeach; ?>
+
                     </select>
                 </label>
 
