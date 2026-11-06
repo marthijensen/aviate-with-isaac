@@ -216,7 +216,7 @@ $upcomingAppointments = supabaseRequest(
 
                 <div class="table-row">
 
-         
+
 <span>
     <?= htmlspecialchars($lesson['apointment_date'] ?? 'No date') ?>
 </span>
@@ -258,11 +258,8 @@ $upcomingAppointments = supabaseRequest(
                 <span>Time</span>
                 <span>Type</span>
             </div>
-
- 
-    <?php foreach ($upcomingAppointments as $appointment): ?>
-
-        <div class="table-row">
+            <?php foreach ($upcomingAppointments as $appointment): ?>
+            <div class="table-row">
 
             <span>
                 <?= htmlspecialchars($appointment['apointment_date'] ?? 'No date') ?>

@@ -81,7 +81,7 @@ function app_router(): Router
         ]);
     });
 
-    
+
 
     $router->get('/students', static function (): void {
         $students = null;
