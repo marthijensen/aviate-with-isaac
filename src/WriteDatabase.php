@@ -14,7 +14,7 @@ final class WriteDatabase
 
         if ($host === '' || $username === '' || $password === '') {
             throw new RuntimeException(
-                'Read-only database connection is not configured.'
+                'Write database connection is not configured.'
             );
         }
 

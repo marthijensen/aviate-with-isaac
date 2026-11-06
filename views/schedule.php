@@ -138,7 +138,7 @@
 
                 <div class="span-2 actions">
                     <button type="submit">
-                        Validate Lesson
+                        Schedule Lesson
                     </button>
                 </div>
 
