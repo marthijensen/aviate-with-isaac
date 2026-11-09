@@ -50,7 +50,10 @@
             </ul>
 
         </article>
-    </section>
+
+</article>
+
+</section>
 
 <?php endif; ?>
 
@@ -131,6 +134,30 @@
         <?php endif; ?>
     </article>
 
+</section>
+
+<section class="fields-grid" style="margin-top: 20px;">
+    <article class="progress-card" style="width: 100%;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="margin: 0;">Progress Tracker</h2>
+            <a href="student-progress.php?id=<?= e((string) ($student['id'] ?? '')) ?>" style="font-weight: 600; text-decoration: none;">View Full Checklist →</a>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+            <div>
+                <div style="font-size: 2rem; font-weight: bold; color: #1a202c;">%</div>
+                <div style="font-size: 0.85rem; color: #718096; margin-top: 4px;">Overall progress</div>
+            </div>
+            <div style="border-left: 1px solid #e2e8f0; padding-left: 20px;">
+                <div style="font-size: 2rem; font-weight: bold; color: #1a202c;">— / —</div>
+                <div style="font-size: 0.85rem; color: #718096; margin-top: 4px;">Subtopics complete</div>
+            </div>
+            <div style="border-left: 1px solid #e2e8f0; padding-left: 20px;">
+                <div style="font-size: 2rem; font-weight: bold; color: #1a202c;">— / —</div>
+                <div style="font-size: 0.85rem; color: #718096; margin-top: 4px;">Topics complete</div>
+            </div>
+        </div>
+    </article>
 </section>
 
 <?php endif; ?>

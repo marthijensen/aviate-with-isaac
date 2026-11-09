@@ -1,7 +1,5 @@
 <?php
-
 declare(strict_types=1);
-
 /**
  * Application routes.
  */
@@ -81,46 +79,40 @@ function app_router(): Router
         ]);
     });
 
-
-
-    $router->get('/students', static function (): void {
-        $students = null;
-
+$router->get('/students', static function (): void {
+        $studentId = isset($_GET['student_id']) ? (int) $_GET['student_id'] : 0;
+        
+        $students = [];
         try {
-            // Connect using Marthi's read-only database account.
             $db = ReadOnlyDatabase::connect();
-
-            // Retrieve active students, oldest first.
             $statement = $db->query(
-                "SELECT
-                    id,
-                    first_name,
-                    last_name,
-                    created_at,
-                    status
-                 FROM public.students
-                 WHERE status = 'active'
-                 ORDER BY created_at ASC"
+                "SELECT id, first_name, last_name, status
+                FROM public.students
+                WHERE status = 'active'
+                ORDER BY last_name ASC"
             );
-
-            $students = $statement->fetchAll();
-
+            $students = $statement->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable $exception) {
-            error_log(
-                'Student list database error: '
-                . $exception->getMessage()
-            );
+            error_log('Students list error: ' . $exception->getMessage());
+            $students = [];
         }
+        
+        $byId = [];
+        foreach ($students as $student) {
+            $byId[$student['id']] = $student;
+        }
+        $selectedStudent = $byId[$studentId] ?? null;
 
         render('students', [
             'title' => 'Students',
             'students' => $students,
+            'selectedStudentId' => $studentId,
+            'selectedStudent' => $selectedStudent,
+            'byId' => $byId,
         ]);
     });
-
-
-
-    $router->get('/students/profile', static function (): void {
+    
+    $router->get('/student-profile', static function (): void {
         $student = null;
         $error = null;
 
@@ -222,11 +214,17 @@ function app_router(): Router
                             $appointmentsError = 'Appointments could not be loaded.';
                         }
                     }
-            } catch (RuntimeException $exception) {
-                error_log('Student profile: ' . $exception->getMessage());
-                http_response_code(503);
-                $error = 'Student information is currently unavailable.';
-            }
+} catch (RuntimeException $exception) {
+            // TEMPORARY: Print the real error on screen
+            echo '<pre style="background: #fee; padding: 15px; border: 1px solid red; color: red;">';
+            echo 'DATABASE ERROR: ' . htmlspecialchars($exception->getMessage(), ENT_QUOTES, 'UTF-8');
+            echo '</pre>';
+            exit;
+
+            error_log('Student profile: ' . $exception->getMessage());
+            http_response_code(503);
+            $error = 'Student information is currently unavailable.';
+        }
         }
 
         render('student-profile', [

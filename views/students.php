@@ -1,9 +1,10 @@
-
 <?php
-// Student data will be supplied by the route.
-// null means the database isn't connected yet.
+// Student data supplied by the route/controller.
 $students = $students ?? null;
 ?>
+<!-- ========================================== -->
+<!-- MAIN VIEW CONTENT                          -->
+<!-- ========================================== -->
 
 <h1>Students</h1>
 
@@ -37,15 +38,15 @@ $students = $students ?? null;
 
                     <li>
                         <span>
-                            <strong>
-                                <?= e(trim(
-                                    (string) ($student['first_name'] ?? '')
-                                    . ' '
-                                    . (string) ($student['last_name'] ?? '')
-                                )) ?>
-                            </strong>
-                            <a href="/students/profile?id=<?= rawurlencode((string) $student['id']) ?>">
-                                View Profile
+                            <?php 
+                                // Fallback check for different potential database key names
+                                $firstName = $student['first_name'] ?? $student['FIRST_NAME'] ?? '';
+                                $lastName = $student['last_name'] ?? $student['LAST_NAME'] ?? '';
+                                $fullName = trim($firstName . ' ' . $lastName);
+                                $studentId = (string) ($student['id'] ?? $student['ID'] ?? '');
+                            ?>
+                            <a href="student-profile?id=<?= rawurlencode($studentId) ?>" style="text-decoration: none; color: inherit;">
+                                <strong><?= htmlspecialchars($fullName !== '' ? $fullName : 'Unnamed Student', ENT_QUOTES, 'UTF-8') ?></strong>
                             </a>
                         </span>
                     </li>
