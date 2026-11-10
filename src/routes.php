@@ -100,7 +100,7 @@ function app_router(): Router
                     status
                  FROM public.students
                  WHERE status = 'active'
-                 ORDER BY created_at ASC"
+                 ORDER BY last_name ASC, first_name ASC, id ASC"
             );
 
             $students = $statement->fetchAll();
