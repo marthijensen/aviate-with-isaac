@@ -214,17 +214,12 @@ $router->get('/students', static function (): void {
                             $appointmentsError = 'Appointments could not be loaded.';
                         }
                     }
-} catch (RuntimeException $exception) {
-            // TEMPORARY: Print the real error on screen
-            echo '<pre style="background: #fee; padding: 15px; border: 1px solid red; color: red;">';
-            echo 'DATABASE ERROR: ' . htmlspecialchars($exception->getMessage(), ENT_QUOTES, 'UTF-8');
-            echo '</pre>';
-            exit;
-
-            error_log('Student profile: ' . $exception->getMessage());
-            http_response_code(503);
-            $error = 'Student information is currently unavailable.';
-        }
+            } catch (RuntimeException $exception) {
+                error_log('Student profile: ' . $exception->getMessage());
+                http_response_code(503);
+                $error = 'Student information is currently unavailable.';
+            }
+    
         }
 
         render('student-profile', [
