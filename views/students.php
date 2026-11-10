@@ -45,7 +45,7 @@ $students = $students ?? null;
                                 $fullName = trim($firstName . ' ' . $lastName);
                                 $studentId = (string) ($student['id'] ?? $student['ID'] ?? '');
                             ?>
-                            <a href="student-profile?id=<?= rawurlencode($studentId) ?>" style="text-decoration: none; color: inherit;">
+                            <a href="/students/profile?id=<?= rawurlencode($studentId) ?>" style="text-decoration: none; color: inherit;">
                                 <strong><?= htmlspecialchars($fullName !== '' ? $fullName : 'Unnamed Student', ENT_QUOTES, 'UTF-8') ?></strong>
                             </a>
                         </span>

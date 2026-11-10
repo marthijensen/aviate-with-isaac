@@ -50,10 +50,7 @@
             </ul>
 
         </article>
-
-</article>
-
-</section>
+    </section>
 
 <?php endif; ?>
 

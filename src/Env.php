@@ -12,7 +12,6 @@ final class Env
 
     public static function load(string $path): void
     {
-        $path ??= dirname(__DIR__) . '/../.env';
         if (!is_readable($path)) {
             return;
         }
