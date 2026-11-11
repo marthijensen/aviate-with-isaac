@@ -1,0 +1,1022 @@
+diff -ruN a2/.env.example b3/.env.example
+--- a2/.env.example	2026-11-11 21:16:13.090647759 +0000
++++ b3/.env.example	2026-11-11 21:33:56.408610595 +0000
+@@ -18,4 +18,7 @@
+ WRITE_DB_PASSWORD=
+ 
+ # Enable only for authorized local testing
+-AVIATE_LOCAL_WRITES=0
+\ No newline at end of file
++AVIATE_LOCAL_WRITES=0
++
++# Showcase only: allow the progress checklist to save from any computer
++AVIATE_DEMO_WRITES=0
+diff -ruN a2/docs/database.md b3/docs/database.md
+--- a2/docs/database.md	2026-11-11 21:16:13.094294945 +0000
++++ b3/docs/database.md	2026-11-11 21:33:56.460402809 +0000
+@@ -97,3 +97,38 @@
+ - Hides cancelled and completed appointments. Appointments with no status are shown.
+ - Appointments with no `start_time` stay listed for their whole day, after the timed ones, and show "Time TBD".
+ - Sorted by date, then time. Shows up to 10.
++
++## Training Progress Checklist
++
++The checklist on a student's profile reads existing tables and writes only to `student_progress`.
++
++### course_topics
++
++| Column | Used for |
++| --- | --- |
++| topic_id | Checklist item key |
++| topic | Topic heading (rows with the same topic are grouped) |
++| subtopic | Checklist item |
++| display_order | Order on the page |
++| course_id | Only rows matching the student's `course_id` are shown |
++
++### student_progress
++
++| Column | Used for |
++| --- | --- |
++| student_id | Student (`students.id`) |
++| course_topic_id | Checklist item (`course_topics.topic_id`) |
++| is_completed | `true` when checked, `false` when unchecked |
++| completed_at | When it was checked (empty when unchecked) |
++
++Checking a box creates the student's record for that item, or edits it if it exists. Unchecking edits the same record to `is_completed = false`. No unique constraint is required.
++
++### Page
++
++| Method | Path | Page |
++| --- | --- | --- |
++| GET | `/students/trainingprogress?id=` | Checklist for one student (linked from the student profile) |
++| GET | `/students/student-progress?id=` | Second view of the same checklist, with a mark-all box per topic (also linked from the profile) |
++| POST | `/students/trainingprogress` or `/students/student-progress` | Saves one or several checkbox changes |
++
++Saving needs `AVIATE_LOCAL_WRITES=1` on this computer, or `AVIATE_DEMO_WRITES=1` to allow any computer during a showcase. The app has no login yet, so set `AVIATE_DEMO_WRITES` back to `0` afterwards.
+diff -ruN a2/src/routes.php b3/src/routes.php
+--- a2/src/routes.php	2026-11-11 21:16:13.094765142 +0000
++++ b3/src/routes.php	2026-11-11 21:33:56.451337560 +0000
+@@ -115,95 +115,262 @@
+         ]);
+     });
+ 
+-// student training progress
+-    $router->post('/students/trainingprogress', static function (): void {
+-        header('Content-Type: application/json; charset=UTF-8');
+-
+-        // Permit writes only during explicitly enabled local development (matching your other write routes)
+-        $remoteAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+-        if (
+-            Env::get('AVIATE_LOCAL_WRITES', '0') !== '1'
+-            || !in_array($remoteAddress, ['127.0.0.1', '::1'], true)
+-        ) {
+-            http_response_code(403);
+-            echo json_encode(['success' => false, 'error' => 'Progress updates are disabled in this environment.']);
+-            return;
+-        }
+-
+-        // Extract and validate incoming POST data from the view's JS fetch call
+-        $studentId = isset($_POST['student_id']) ? (int) $_POST['student_id'] : 0;
+-        $topicId = isset($_POST['topic_id']) ? (int) $_POST['topic_id'] : 0;
+-        $isCompleted = isset($_POST['is_completed']) && $_POST['is_completed'] === '1';
+-
+-        if ($studentId < 1 || $topicId < 1) {
+-            http_response_code(422);
+-            echo json_encode(['success' => false, 'error' => 'Invalid student or topic ID.']);
+-            return;
+-        }
+-
+-        try {
+-            // Strictly use write credentials for mutation operations
+-            $db = WriteDatabase::connect();
+-
+-            // Upsert progress record (assumes a unique constraint on student_id + course_topic_id)
+-            $statement = $db->prepare(
+-                "INSERT INTO public.student_progress (student_id, course_topic_id, is_completed, completed_at)
+-                 VALUES (:student_id, :topic_id, :is_completed, :completed_at)
+-                 ON CONFLICT (student_id, course_topic_id) 
+-                 DO UPDATE SET is_completed = EXCLUDED.is_completed, 
+-                               completed_at = EXCLUDED.completed_at"
+-            );
+-
+-            $completedAt = $isCompleted ? (new DateTimeImmutable('now', app_timezone()))->format('Y-m-d H:i:s') : null;
+-
+-            $statement->execute([
+-                'student_id' => $studentId,
+-                'topic_id' => $topicId,
+-                'is_completed' => $isCompleted ? 1 : 0,
+-                'completed_at' => $completedAt,
+-            ]);
+-
+-            echo json_encode(['success' => true]);
+-        } catch (Throwable $exception) {
+-            error_log('Toggle progress failed: ' . $exception->getMessage());
+-            http_response_code(500);
+-            echo json_encode(['success' => false, 'error' => 'Database error while saving progress.']);
+-        }
+-    });
+-
+-
+-// Open student training progress
+-    $router->get('/students/trainingprogress', static function (): void {
+-        $studentId = isset($_GET['id']) ? (int) $_GET['id'] : (isset($_GET['student_id']) ? (int) $_GET['student_id'] : 0);
+-        
+-        // Initialize your Supabase client (adjust depending on how your container/config provides it)
+-        $supabase = new SupabaseClient(Env::get('SUPABASE_URL'), Env::get('SUPABASE_SECRET_KEY'));
+-
+-        $students = $supabase->select('students', [
+-            'select' => 'id,first_name,last_name,status,course_id,training_goal',
+-            'order' => 'last_name.asc'
+-        ]);
+-
+-        $byId = [];
+-        foreach ($students as $student) {
+-            $byId[$student['id']] = $student;
+-        }
+-        $selectedStudent = $byId[$studentId] ?? null;
+-
+-        render('trainingprogress', [
+-            'title' => 'Student Progress Checklist',
+-            'selectedStudentId' => $studentId,
+-            'selectedStudent' => $selectedStudent,
+-            'progress' => $supabase->select('student_progress', [
+-                'select' => 'student_id,course_topic_id,is_completed,completed_at'
+-            ]),
+-            'topics' => $supabase->select('course_topics', [
+-                'select' => 'topic_id,topic,subtopic,display_order,course_id',
+-                'order' => 'display_order.asc,topic_id.asc'
+-            ]),
+-        ]);
+-    });
+-
++    // ---------------------------------------------------------------------
++    // Student training progress checklist
++    //
++    // Two pages show the same checklist and share one save endpoint:
++    //   GET  /students/trainingprogress?id=   (views/trainingprogress.php)
++    //   GET  /students/student-progress?id=   (views/student-progress.php)
++    //   POST /students/trainingprogress  and  /students/student-progress
++    //        create/update student_progress records (one or several items per request)
++    //
++    // Reads course_topics and students; writes only to student_progress.
++    // ---------------------------------------------------------------------
++
++    // Saving is allowed on this computer when AVIATE_LOCAL_WRITES=1 (same rule as the other
++    // write routes), or from any computer when AVIATE_DEMO_WRITES=1 (showcase only; the app
++    // has no login yet, so turn it off afterwards).
++    $progressWritesEnabled = static function (): bool {
++        if (Env::get('AVIATE_DEMO_WRITES', '0') === '1') {
++            return true;
++        }
++
++        $remoteAddress = $_SERVER['REMOTE_ADDR'] ?? '';
++
++        return Env::get('AVIATE_LOCAL_WRITES', '0') === '1'
++            && in_array($remoteAddress, ['127.0.0.1', '::1'], true);
++    };
++
++    // Builds the GET handler for a checklist page that renders the given view.
++    $progressPage = static function (string $view) use ($progressWritesEnabled): callable {
++        return static function () use ($view, $progressWritesEnabled): void {
++            if (session_status() !== PHP_SESSION_ACTIVE) {
++                session_start();
++            }
++
++            if (empty($_SESSION['progress_csrf'])) {
++                $_SESSION['progress_csrf'] = bin2hex(random_bytes(32));
++            }
++
++            $selectedStudent = null;
++            $topics = [];
++            $completed = [];
++            $error = null;
++            $progressLoadFailed = false;
++
++            $id = $_GET['id'] ?? ($_GET['student_id'] ?? null);
++            $studentId = (is_string($id) && ctype_digit($id)) ? (int) $id : 0;
++
++            if ($studentId < 1) {
++                http_response_code(400);
++                $error = 'A valid student ID is required.';
++            } else {
++                try {
++                    $supabase = supabase();
++
++                    $students = $supabase->select('students', [
++                        'select' => 'id,first_name,last_name,status,course_id,training_goal',
++                        'id' => 'eq.' . $studentId,
++                        'limit' => '1',
++                    ]);
++
++                    if ($students === []) {
++                        http_response_code(404);
++                        $error = 'Student not found.';
++                    } elseif (($students[0]['course_id'] ?? null) === null) {
++                        http_response_code(404);
++                        $error = 'This student is not enrolled in a course yet.';
++                    } else {
++                        $selectedStudent = $students[0];
++
++                        // Only the topics for this student's course.
++                        $topics = $supabase->select('course_topics', [
++                            'select' => 'topic_id,topic,subtopic,display_order,course_id',
++                            'course_id' => 'eq.' . (int) $selectedStudent['course_id'],
++                            'order' => 'display_order.asc,topic_id.asc',
++                            'limit' => '1000',
++                        ]);
++
++                        // Only this student's saved progress. If it cannot be read, still show
++                        // the checklist (nothing checked) and say so on the page.
++                        try {
++                            $rows = $supabase->select('student_progress', [
++                                'select' => 'course_topic_id,is_completed',
++                                'student_id' => 'eq.' . $studentId,
++                                'limit' => '1000',
++                            ]);
++
++                            foreach ($rows as $row) {
++                                if (!empty($row['is_completed'])) {
++                                    $completed[(int) $row['course_topic_id']] = true;
++                                }
++                            }
++                        } catch (Throwable $exception) {
++                            error_log('Training progress (read): ' . $exception->getMessage());
++                            $progressLoadFailed = true;
++                        }
++                    }
++                } catch (Throwable $exception) {
++                    error_log('Training progress page: ' . $exception->getMessage());
++                    http_response_code(503);
++                    $error = 'Training progress is currently unavailable.';
++                }
++            }
++
++            render($view, [
++                'title' => 'Student Progress Checklist',
++                'selectedStudentId' => $studentId,
++                'selectedStudent' => $selectedStudent,
++                'topics' => $topics,
++                'completed' => $completed,
++                'error' => $error,
++                'progressLoadFailed' => $progressLoadFailed,
++                'csrf' => (string) $_SESSION['progress_csrf'],
++                'writesEnabled' => $progressWritesEnabled(),
++            ]);
++        };
++    };
++
++    // Saves checked/unchecked items. One request can carry one item (topic_id) or several
++    // (topic_ids, comma separated), for the "mark all" box on a topic.
++    $progressSave = static function () use ($progressWritesEnabled): void {
++        if (session_status() !== PHP_SESSION_ACTIVE) {
++            session_start();
++        }
++
++        header('Content-Type: application/json; charset=UTF-8');
++
++        $fail = static function (int $status, string $message): void {
++            http_response_code($status);
++            echo json_encode(['success' => false, 'error' => $message]);
++        };
++
++        if (!$progressWritesEnabled()) {
++            $fail(403, 'Progress updates are disabled in this environment.');
++            return;
++        }
++
++        // Verify the request came from one of our checklist pages.
++        $submittedToken = $_POST['csrf_token'] ?? '';
++        $expectedToken = $_SESSION['progress_csrf'] ?? '';
++
++        if (
++            !is_string($submittedToken)
++            || !is_string($expectedToken)
++            || $expectedToken === ''
++            || !hash_equals($expectedToken, $submittedToken)
++        ) {
++            $fail(403, 'Invalid token. Refresh the page and try again.');
++            return;
++        }
++
++        $studentId = isset($_POST['student_id']) ? (int) $_POST['student_id'] : 0;
++        $isCompleted = ($_POST['is_completed'] ?? '') === '1';
++
++        $rawIds = $_POST['topic_ids'] ?? ($_POST['topic_id'] ?? '');
++        $topicIds = [];
++
++        foreach (explode(',', is_string($rawIds) ? $rawIds : '') as $rawId) {
++            $rawId = trim($rawId);
++
++            if ($rawId !== '' && ctype_digit($rawId) && (int) $rawId > 0) {
++                $topicIds[(int) $rawId] = (int) $rawId;
++            }
++        }
++
++        $topicIds = array_values($topicIds);
++
++        if ($studentId < 1 || $topicIds === [] || count($topicIds) > 300) {
++            $fail(422, 'Invalid student or topic ID.');
++            return;
++        }
++
++        try {
++            // Every item must belong to the student's own course.
++            $supabase = supabase();
++
++            $students = $supabase->select('students', [
++                'select' => 'course_id',
++                'id' => 'eq.' . $studentId,
++                'limit' => '1',
++            ]);
++
++            $items = $supabase->select('course_topics', [
++                'select' => 'topic_id,course_id',
++                'topic_id' => 'in.(' . implode(',', $topicIds) . ')',
++                'limit' => '1000',
++            ]);
++
++            $courseId = $students[0]['course_id'] ?? null;
++            $valid = $students !== [] && $courseId !== null && count($items) === count($topicIds);
++
++            foreach ($items as $item) {
++                if ((int) ($item['course_id'] ?? 0) !== (int) $courseId) {
++                    $valid = false;
++                }
++            }
++
++            if (!$valid) {
++                $fail(422, 'That checklist item does not belong to this student\'s course.');
++                return;
++            }
++
++            $completedAt = $isCompleted
++                ? (new DateTimeImmutable('now', app_timezone()))->format('Y-m-d H:i:s')
++                : null;
++
++            // Strictly use the write credentials for changes to student_progress.
++            $db = WriteDatabase::connect();
++            $db->beginTransaction();
++
++            // Edit the student's record for an item if it exists, otherwise create it.
++            // (No unique constraint is required for this.)
++            $update = $db->prepare(
++                'UPDATE public.student_progress
++                SET is_completed = :is_completed, completed_at = :completed_at
++                WHERE student_id = :student_id AND course_topic_id = :topic_id'
++            );
++
++            $insert = $db->prepare(
++                'INSERT INTO public.student_progress
++                    (student_id, course_topic_id, is_completed, completed_at)
++                VALUES
++                    (:student_id, :topic_id, :is_completed, :completed_at)'
++            );
++
++            foreach ($topicIds as $topicId) {
++                $params = [
++                    'student_id' => $studentId,
++                    'topic_id' => $topicId,
++                    'is_completed' => $isCompleted ? 1 : 0,
++                    'completed_at' => $completedAt,
++                ];
++
++                $update->execute($params);
++
++                if ($update->rowCount() === 0) {
++                    $insert->execute($params);
++                }
++            }
++
++            $db->commit();
++
++            echo json_encode(['success' => true]);
++        } catch (Throwable $exception) {
++            if (isset($db) && $db instanceof PDO && $db->inTransaction()) {
++                $db->rollBack();
++            }
++
++            error_log('Toggle progress failed: ' . $exception->getMessage());
++            $fail(500, 'Database error while saving progress.');
++        }
++    };
++
++    $router->get('/students/trainingprogress', $progressPage('trainingprogress'));
++    $router->get('/students/student-progress', $progressPage('student-progress'));
++    $router->post('/students/trainingprogress', $progressSave);
++    $router->post('/students/student-progress', $progressSave);
++
+     $router->get('/students/profile', static function (): void {
+         $student = null;
+         $error = null;
+diff -ruN a2/views/student-profile.php b3/views/student-profile.php
+--- a2/views/student-profile.php	2026-11-11 21:16:13.095489699 +0000
++++ b3/views/student-profile.php	2026-11-11 21:33:56.460294000 +0000
+@@ -137,7 +137,10 @@
+     <article class="progress-card" style="width: 100%;">
+         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+             <h2 style="margin: 0;">Progress Tracker</h2>
+-            <a href="trainingprogress?id=<?= e((string) ($student['id'] ?? '')) ?>" style="font-weight: 600; text-decoration: none;">View Full Checklist →</a>
++            <div style="display: flex; gap: 20px; align-items: center;">
++                <a href="/students/trainingprogress?id=<?= e((string) ($student['id'] ?? '')) ?>" style="font-weight: 600; text-decoration: none;">View Full Checklist →</a>
++                <a href="/students/student-progress?id=<?= e((string) ($student['id'] ?? '')) ?>" style="font-weight: 600; text-decoration: none;">Student Progress →</a>
++            </div>
+         </div>
+         
+         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+diff -ruN a2/views/student-progress.php b3/views/student-progress.php
+--- a2/views/student-progress.php	1970-01-01 00:00:00.000000000 +0000
++++ b3/views/student-progress.php	2026-11-11 21:33:56.451432164 +0000
+@@ -0,0 +1,255 @@
++<?php
++/** @var string $title */
++/** @var int $selectedStudentId */
++/** @var ?array $selectedStudent */
++/** @var array $topics */
++/** @var array<int, true> $completed */
++/** @var ?string $error */
++/** @var bool $progressLoadFailed */
++/** @var string $csrf */
++/** @var bool $writesEnabled */
++
++$groupedTopics = [];
++
++foreach ($topics as $topic) {
++    $groupedTopics[trim((string) ($topic['topic'] ?? 'General Topic'))][] = $topic;
++}
++
++$totalItems = count($topics);
++$doneItems = 0;
++$topicsDone = 0;
++
++foreach ($groupedTopics as $items) {
++    $finished = 0;
++
++    foreach ($items as $item) {
++        if (isset($completed[(int) ($item['topic_id'] ?? 0)])) {
++            $finished++;
++        }
++    }
++
++    $doneItems += $finished;
++
++    if ($finished === count($items)) {
++        $topicsDone++;
++    }
++}
++
++$percent = $totalItems > 0 ? (int) round($doneItems / $totalItems * 100) : 0;
++?>
++<style>
++    .pt-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0 8px; padding-top: 20px; border-top: 1px solid var(--line); }
++    .pt-stat strong { display: block; font-size: 2rem; color: var(--navy); }
++    .pt-stat span { color: var(--muted); font-size: 0.85rem; }
++    details.pt-topic { border-top: 1px solid var(--line); }
++    details.pt-topic summary { display: flex; align-items: center; gap: 12px; padding: 14px 0; cursor: pointer; font-weight: 600; color: var(--navy); }
++    details.pt-topic .pt-count { margin-left: auto; color: var(--muted); font-weight: 400; white-space: nowrap; }
++    ul.pt-subs { list-style: none; margin: 0; padding: 0 0 14px 30px; }
++    ul.pt-subs li { padding: 5px 0; }
++    ul.pt-subs label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
++    ul.pt-subs li.pt-done span { color: var(--muted); text-decoration: line-through; }
++    .pt-topics input[type=checkbox] { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--navy); flex: none; }
++    .pt-topics input[type=checkbox]:disabled { cursor: not-allowed; }
++    #pt-toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 16px; background: var(--paper); border: 1px solid var(--navy); font-size: 0.85rem; font-weight: 600; }
++    #pt-toast.pt-error { background: var(--navy); color: #fff; }
++    #pt-toast:empty { display: none; }
++    @media (max-width: 750px) { .pt-stats { grid-template-columns: 1fr; } ul.pt-subs { padding-left: 0; } }
++</style>
++
++<h1>Training Progress</h1>
++
++<p class="lead">
++    Check off topics and subtopics as the student completes them.
++</p>
++
++<?php if ($error !== null): ?>
++
++    <p><a href="/students">← Back to Students</a></p>
++
++    <section class="fields-grid single">
++        <article class="field-card">
++            <p><?= e($error) ?></p>
++        </article>
++    </section>
++
++<?php elseif ($selectedStudent !== null): ?>
++
++    <p>
++        <a href="/students/profile?id=<?= $selectedStudentId ?>">← Back to Student Profile</a>
++    </p>
++
++    <section class="fields-grid single">
++        <article class="field-card">
++
++            <h2><?= e(trim((string) ($selectedStudent['first_name'] ?? '') . ' ' . (string) ($selectedStudent['last_name'] ?? ''))) ?></h2>
++
++            <?php if (trim((string) ($selectedStudent['training_goal'] ?? '')) !== ''): ?>
++                <p><?= e((string) $selectedStudent['training_goal']) ?></p>
++            <?php endif; ?>
++
++            <?php if (!$writesEnabled): ?>
++                <p class="action-note">Saving is turned off, so the checkboxes are read-only. Set AVIATE_LOCAL_WRITES=1 (this computer) or AVIATE_DEMO_WRITES=1 in .env to enable it.</p>
++            <?php endif; ?>
++
++            <?php if ($progressLoadFailed): ?>
++                <p class="action-note">Saved progress could not be loaded, so nothing is shown as checked.</p>
++            <?php endif; ?>
++
++            <div class="pt-stats">
++                <div class="pt-stat"><strong id="pt-percent"><?= $percent ?>%</strong><span>Overall progress</span></div>
++                <div class="pt-stat"><strong id="pt-subs"><?= $doneItems ?> / <?= $totalItems ?></strong><span>Subtopics complete</span></div>
++                <div class="pt-stat"><strong id="pt-topics"><?= $topicsDone ?> / <?= count($groupedTopics) ?></strong><span>Topics complete</span></div>
++            </div>
++
++            <?php if ($groupedTopics === []): ?>
++
++                <p>No topics found for this student's course.</p>
++
++            <?php else: ?>
++
++                <div class="pt-topics" id="pt-topics-list">
++
++                    <?php foreach ($groupedTopics as $topicName => $items):
++                        $finished = 0;
++
++                        foreach ($items as $item) {
++                            if (isset($completed[(int) ($item['topic_id'] ?? 0)])) {
++                                $finished++;
++                            }
++                        }
++                    ?>
++
++                        <details class="pt-topic">
++
++                            <summary>
++                                <input type="checkbox" class="pt-topic-check"
++                                       aria-label="Mark all of <?= e((string) $topicName) ?>"
++                                       <?= ($items !== [] && $finished === count($items)) ? 'checked' : '' ?>
++                                       <?= $writesEnabled ? '' : 'disabled' ?>>
++                                <span><?= e((string) $topicName) ?></span>
++                                <span class="pt-count"><?= $finished ?>/<?= count($items) ?></span>
++                            </summary>
++
++                            <ul class="pt-subs">
++                                <?php foreach ($items as $item):
++                                    $itemId = (int) ($item['topic_id'] ?? 0);
++                                ?>
++                                    <li>
++                                        <label>
++                                            <input type="checkbox" class="pt-sub"
++                                                   data-id="<?= $itemId ?>"
++                                                   <?= isset($completed[$itemId]) ? 'checked' : '' ?>
++                                                   <?= $writesEnabled ? '' : 'disabled' ?>>
++                                            <span><?= e((string) ($item['subtopic'] ?? 'General')) ?></span>
++                                        </label>
++                                    </li>
++                                <?php endforeach; ?>
++                            </ul>
++
++                        </details>
++
++                    <?php endforeach; ?>
++
++                </div>
++
++            <?php endif; ?>
++
++        </article>
++    </section>
++
++    <div id="pt-toast" role="status" aria-live="polite"></div>
++
++    <script>
++    (function () {
++        const studentId = <?= $selectedStudentId ?>;
++        const csrf = <?= json_encode($csrf) ?>;
++        const root = document.getElementById('pt-topics-list');
++        const toast = document.getElementById('pt-toast');
++
++        if (!root) {
++            return;
++        }
++
++        function say(message, isError, ms) {
++            toast.textContent = message || '';
++            toast.className = isError ? 'pt-error' : '';
++            if (message && ms) {
++                setTimeout(function () { if (toast.textContent === message) toast.textContent = ''; }, ms);
++            }
++        }
++
++        // Recalculate counts, strikethrough and partial state from the checkboxes.
++        function refresh() {
++            let done = 0;
++            let total = 0;
++            let topicsDone = 0;
++            const details = root.querySelectorAll('details.pt-topic');
++
++            details.forEach(function (d) {
++                const subs = Array.from(d.querySelectorAll('input.pt-sub'));
++                const n = subs.filter(function (s) { return s.checked; }).length;
++                const all = subs.length > 0 && n === subs.length;
++
++                done += n;
++                total += subs.length;
++                if (all) topicsDone++;
++
++                const topicBox = d.querySelector('input.pt-topic-check');
++                topicBox.checked = all;
++                topicBox.indeterminate = n > 0 && !all;
++
++                d.querySelector('.pt-count').textContent = n + '/' + subs.length;
++                subs.forEach(function (s) { s.closest('li').classList.toggle('pt-done', s.checked); });
++            });
++
++            document.getElementById('pt-percent').textContent = (total ? Math.round(done / total * 100) : 0) + '%';
++            document.getElementById('pt-subs').textContent = done + ' / ' + total;
++            document.getElementById('pt-topics').textContent = topicsDone + ' / ' + details.length;
++        }
++
++        async function save(boxes, checked, previous) {
++            say('Saving...');
++
++            try {
++                const formData = new FormData();
++                formData.append('csrf_token', csrf);
++                formData.append('student_id', String(studentId));
++                formData.append('topic_ids', boxes.map(function (b) { return b.dataset.id; }).join(','));
++                formData.append('is_completed', checked ? '1' : '0');
++
++                const response = await fetch(window.location.pathname, { method: 'POST', body: formData });
++                const result = await response.json().catch(function () { return {}; });
++
++                if (!response.ok || !result.success) {
++                    throw new Error(result.error || 'Unknown server error');
++                }
++
++                say('Saved', false, 1500);
++            } catch (error) {
++                boxes.forEach(function (b, i) { b.checked = previous[i]; });
++                refresh();
++                say('Could not save: ' + error.message, true);
++            }
++        }
++
++        root.addEventListener('change', function (event) {
++            const box = event.target;
++
++            if (box.classList.contains('pt-sub')) {
++                refresh();
++                save([box], box.checked, [!box.checked]);
++            } else if (box.classList.contains('pt-topic-check')) {
++                const subs = Array.from(box.closest('details').querySelectorAll('input.pt-sub'));
++                const previous = subs.map(function (s) { return s.checked; });
++
++                subs.forEach(function (s) { s.checked = box.checked; });
++                refresh();
++                save(subs, box.checked, previous);
++            }
++        });
++
++        refresh();
++    })();
++    </script>
++
++<?php endif; ?>
+diff -ruN a2/views/trainingprogress.php b3/views/trainingprogress.php
+--- a2/views/trainingprogress.php	2026-11-11 21:16:13.095546344 +0000
++++ b3/views/trainingprogress.php	2026-11-11 21:33:56.411016739 +0000
+@@ -2,131 +2,233 @@
+ /** @var string $title */
+ /** @var int $selectedStudentId */
+ /** @var ?array $selectedStudent */
+-/** @var array $progress */
+ /** @var array $topics */
++/** @var array<int, true> $completed */
++/** @var ?string $error */
++/** @var bool $progressLoadFailed */
++/** @var string $csrf */
++/** @var bool $writesEnabled */
+ 
+-// --- DEBUG HELPER ---
+-// --------------------
+-
+-function h(?string $value): string
+-{
+-    return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
+-}
++$groupedTopics = [];
+ 
+-function studentName(array $student): string
+-{
+-    return trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
++foreach ($topics as $topic) {
++    $groupedTopics[trim((string) ($topic['topic'] ?? 'General Topic'))][] = $topic;
+ }
+ 
+-// Process progress map safely filtered for this student
+-$completedSubtopics = [];
+-foreach ($progress as $p) {
+-    if (((int)($p['student_id'] ?? 0)) === $selectedStudentId) {
+-        if (!empty($p['is_completed']) || !empty($p['completed'])) {
+-            $completedSubtopics[(int)$p['course_topic_id']] = true;
++$totalItems = count($topics);
++$doneItems = 0;
++$topicsDone = 0;
++
++foreach ($groupedTopics as $items) {
++    $finished = 0;
++
++    foreach ($items as $item) {
++        if (isset($completed[(int) ($item['topic_id'] ?? 0)])) {
++            $finished++;
+         }
+     }
+-}
+ 
+-// Group topics by parent topic name
+-$groupedTopics = [];
+-foreach ($topics as $topic) {
+-    $topicName = trim((string)($topic['topic'] ?? 'General Topic'));
+-    $groupedTopics[$topicName][] = $topic;
++    $doneItems += $finished;
++
++    if ($finished === count($items)) {
++        $topicsDone++;
++    }
+ }
+ 
+-$trainingGoal = trim($selectedStudent['training_goal'] ?? '');
+-$courseTitle = $trainingGoal !== '' ? $trainingGoal . ' Topics' : 'Course Topics';
++$percent = $totalItems > 0 ? (int) round($doneItems / $totalItems * 100) : 0;
+ ?>
++<style>
++    .tp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 16px 0 20px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
++    .tp-stat strong { display: block; font-size: 2rem; color: #1a202c; }
++    .tp-stat span { color: #718096; font-size: 0.85rem; }
++    .tp-topic { padding: 0.75rem 0; border-bottom: 1px solid #eaeaea; }
++    .tp-topic summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; cursor: pointer; font-weight: 600; }
++    .tp-count { font-size: 0.85rem; color: #666; font-weight: 500; background: #f4f4f5; padding: 0.2rem 0.6rem; border-radius: 4px; white-space: nowrap; }
++    .tp-items { list-style: none; padding-left: 1rem; margin: 0.75rem 0 0; display: grid; gap: 0.5rem; border-left: 2px solid #e4e4e7; }
++    .tp-items li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0.35rem 0.5rem; background: #fafafa; border-radius: 4px; }
++    .tp-items label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; cursor: pointer; white-space: nowrap; color: #52525b; }
++    .tp-items label.tp-done { color: #16a34a; }
++    .tp-items input[type=checkbox] { width: 1rem; height: 1rem; cursor: pointer; }
++    .tp-items input[type=checkbox]:disabled { cursor: not-allowed; }
++    #tp-toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 16px; background: #fff; border: 1px solid #1a202c; font-size: 0.85rem; font-weight: 600; }
++    #tp-toast.tp-error { background: #1a202c; color: #fff; }
++    #tp-toast:empty { display: none; }
++    @media (max-width: 750px) { .tp-stats { grid-template-columns: 1fr; } }
++</style>
++
++<?php if ($error !== null): ?>
++
++  <h1>Progress Checklist</h1>
++  <p><a href="/students">← Back to Students</a></p>
++
++  <section class="fields-grid single">
++    <article class="field-card">
++      <p><?= e($error) ?></p>
++    </article>
++  </section>
+ 
+-<?php if ($selectedStudentId > 0 && $selectedStudent): ?>
+-  <h1 id="page-title">Progress Checklist for <?= h(studentName($selectedStudent)) ?></h1>
+-  <p class="lead" id="page-lead">Viewing training checklist and topic completion status.</p>
++<?php elseif ($selectedStudent !== null): ?>
++
++  <h1 id="page-title">Progress Checklist for <?= e(trim((string) ($selectedStudent['first_name'] ?? '') . ' ' . (string) ($selectedStudent['last_name'] ?? ''))) ?></h1>
++  <p class="lead" id="page-lead">Check items off as the student completes them.</p>
++  <p><a href="/students/profile?id=<?= $selectedStudentId ?>">← Back to Student Profile</a></p>
+ 
+   <section class="fields-grid single" aria-label="Student Progress">
+     <article class="field-card">
+-      <h2><?= h($courseTitle) ?></h2>
+-      <ul class="rows" style="list-style: none; padding: 0;">
+-      <?php if (!empty($groupedTopics)): ?>
+-        <?php foreach ($groupedTopics as $topicName => $subtopics): 
+-            $count = count($subtopics);
+-            $label = $count === 1 ? 'subtopic' : 'subtopics';
+-        ?>
+-          <li style="padding: 0.75rem 0; border-bottom: 1px solid #eaeaea;">
+-            <details style="cursor: pointer;">
+-              <summary style="font-weight: 600; display: flex; justify-content: space-between; align-items: center; outline: none;">
+-                <span style="font-size: 1.05rem; color: #222;"><?= h($topicName) ?></span>
+-                <span style="font-size: 0.85rem; color: #666; font-weight: 500; background: #f4f4f5; padding: 0.2rem 0.6rem; border-radius: 4px;">
+-                  <?= $count ?> <?= $label ?> ▾
+-                </span>
++
++      <?php $trainingGoal = trim((string) ($selectedStudent['training_goal'] ?? '')); ?>
++      <h2><?= e($trainingGoal !== '' ? $trainingGoal . ' Topics' : 'Course Topics') ?></h2>
++
++      <?php if (!$writesEnabled): ?>
++        <p class="action-note">Saving is turned off, so the checkboxes are read-only. Set AVIATE_LOCAL_WRITES=1 (this computer) or AVIATE_DEMO_WRITES=1 in .env to enable it.</p>
++      <?php endif; ?>
++
++      <?php if ($progressLoadFailed): ?>
++        <p class="action-note">Saved progress could not be loaded, so nothing is shown as checked.</p>
++      <?php endif; ?>
++
++      <div class="tp-stats">
++        <div class="tp-stat"><strong id="tp-percent"><?= $percent ?>%</strong><span>Overall progress</span></div>
++        <div class="tp-stat"><strong id="tp-items"><?= $doneItems ?> / <?= $totalItems ?></strong><span>Subtopics complete</span></div>
++        <div class="tp-stat"><strong id="tp-topics"><?= $topicsDone ?> / <?= count($groupedTopics) ?></strong><span>Topics complete</span></div>
++      </div>
++
++      <?php if ($groupedTopics === []): ?>
++
++        <p>No topics found for this student's course.</p>
++
++      <?php else: ?>
++
++        <div id="tp-list">
++          <?php foreach ($groupedTopics as $topicName => $items):
++              $finished = 0;
++
++              foreach ($items as $item) {
++                  if (isset($completed[(int) ($item['topic_id'] ?? 0)])) {
++                      $finished++;
++                  }
++              }
++          ?>
++            <details class="tp-topic">
++              <summary>
++                <span><?= e((string) $topicName) ?></span>
++                <span class="tp-count"><?= $finished ?>/<?= count($items) ?></span>
+               </summary>
+-              <ul style="list-style: none; padding-left: 1rem; margin-top: 0.75rem; display: grid; gap: 0.5rem; border-left: 2px solid #e4e4e7;">
+-                <?php foreach ($subtopics as $sub): 
+-                    $topicId = (int)($sub['topic_id'] ?? 0);
+-                    $isCompleted = isset($completedSubtopics[$topicId]);
++
++              <ul class="tp-items">
++                <?php foreach ($items as $item):
++                    $itemId = (int) ($item['topic_id'] ?? 0);
++                    $isCompleted = isset($completed[$itemId]);
+                 ?>
+-                  <li style="display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0.5rem; background: #fafafa; border-radius: 4px;">
+-                    <span style="color: #444; font-weight: 500;"><?= h($sub['subtopic'] ?? 'General') ?></span>
+-                    <span class="when" style="display: flex; align-items: center; gap: 0.4rem;">
+-                      <label style="cursor: pointer; display: flex; align-items: center; gap: 0.3rem; font-size: 0.9rem; color: <?= $isCompleted ? '#16a34a' : '#52525b' ?>;">
+-                        <input type="checkbox" 
+-                               class="progress-checkbox" 
+-                               data-student-id="<?= $selectedStudentId ?>" 
+-                               data-topic-id="<?= $topicId ?>" 
+-                               <?= $isCompleted ? 'checked' : '' ?>
+-                               style="cursor: pointer; width: 1rem; height: 1rem;">
+-                        <span class="status-text"><?= $isCompleted ? 'Completed' : 'Pending' ?></span>
+-                      </label>
+-                    </span>
++                  <li>
++                    <span><?= e((string) ($item['subtopic'] ?? 'General')) ?></span>
++                    <label class="<?= $isCompleted ? 'tp-done' : '' ?>">
++                      <input type="checkbox" class="progress-checkbox"
++                             data-topic-id="<?= $itemId ?>"
++                             <?= $isCompleted ? 'checked' : '' ?>
++                             <?= $writesEnabled ? '' : 'disabled' ?>>
++                      <span class="status-text"><?= $isCompleted ? 'Completed' : 'Pending' ?></span>
++                    </label>
+                   </li>
+                 <?php endforeach; ?>
+               </ul>
+             </details>
+-          </li>
+-        <?php endforeach; ?>
+-      <?php else: ?>
+-        <li><span>No topics found for this student's course.</span></li>
++          <?php endforeach; ?>
++        </div>
++
+       <?php endif; ?>
+-      </ul>
++
+     </article>
+   </section>
+-<?php endif; ?>
+ 
+-<script>
+-  document.addEventListener('change', async (event) => {
+-    if (!event.target.classList.contains('progress-checkbox')) return;
+-
+-    const checkbox = event.target;
+-    const studentId = checkbox.dataset.studentId;
+-    const topicId = checkbox.dataset.topicId;
+-    const isCompleted = checkbox.checked;
+-    const statusLabel = checkbox.closest('label').querySelector('.status-text');
+-
+-    try {
+-      const formData = new FormData();
+-      formData.append('action', 'toggle_progress');
+-      formData.append('student_id', studentId);
+-      formData.append('topic_id', topicId);
+-      formData.append('is_completed', isCompleted ? '1' : '0');
+-
+-      const response = await fetch(window.location.pathname, {
+-        method: 'POST',
+-        body: formData
+-      });
++  <div id="tp-toast" role="status" aria-live="polite"></div>
+ 
+-      const result = await response.json();
++  <script>
++    (function () {
++      const studentId = <?= $selectedStudentId ?>;
++      const csrf = <?= json_encode($csrf) ?>;
++      const list = document.getElementById('tp-list');
++      const toast = document.getElementById('tp-toast');
+ 
+-      if (response.ok && result.success) {
+-        statusLabel.textContent = isCompleted ? 'Completed' : 'Pending';
+-        checkbox.closest('label').style.color = isCompleted ? '#16a34a' : '#52525b';
+-      } else {
+-        checkbox.checked = !isCompleted;
+-        alert('Failed to update progress: ' + (result.error || 'Unknown server error'));
++      if (!list) {
++        return;
+       }
+-    } catch (err) {
+-      checkbox.checked = !isCompleted;
+-      alert('Network error while updating progress.');
+-      console.error(err);
+-    }
+-  });
+-</script>
+\ No newline at end of file
++
++      function say(message, isError, ms) {
++        toast.textContent = message || '';
++        toast.className = isError ? 'tp-error' : '';
++        if (message && ms) {
++          setTimeout(function () { if (toast.textContent === message) toast.textContent = ''; }, ms);
++        }
++      }
++
++      // Recalculate the labels, counts and summary cards from the checkboxes.
++      function refresh() {
++        let done = 0;
++        let total = 0;
++        let topicsDone = 0;
++        const topics = list.querySelectorAll('details.tp-topic');
++
++        topics.forEach(function (details) {
++          const boxes = Array.from(details.querySelectorAll('input.progress-checkbox'));
++          const n = boxes.filter(function (b) { return b.checked; }).length;
++
++          done += n;
++          total += boxes.length;
++          if (boxes.length > 0 && n === boxes.length) topicsDone++;
++
++          details.querySelector('.tp-count').textContent = n + '/' + boxes.length;
++
++          boxes.forEach(function (b) {
++            const label = b.closest('label');
++            label.classList.toggle('tp-done', b.checked);
++            label.querySelector('.status-text').textContent = b.checked ? 'Completed' : 'Pending';
++          });
++        });
++
++        document.getElementById('tp-percent').textContent = (total ? Math.round(done / total * 100) : 0) + '%';
++        document.getElementById('tp-items').textContent = done + ' / ' + total;
++        document.getElementById('tp-topics').textContent = topicsDone + ' / ' + topics.length;
++      }
++
++      list.addEventListener('change', async function (event) {
++        const box = event.target;
++
++        if (!box.classList.contains('progress-checkbox')) {
++          return;
++        }
++
++        const isCompleted = box.checked;
++        box.disabled = true;
++        refresh();
++        say('Saving...');
++
++        try {
++          const formData = new FormData();
++          formData.append('csrf_token', csrf);
++          formData.append('student_id', String(studentId));
++          formData.append('topic_id', box.dataset.topicId);
++          formData.append('is_completed', isCompleted ? '1' : '0');
++
++          const response = await fetch(window.location.pathname, { method: 'POST', body: formData });
++          const result = await response.json().catch(function () { return {}; });
++
++          if (!response.ok || !result.success) {
++            throw new Error(result.error || 'Unknown server error');
++          }
++
++          say('Saved', false, 1500);
++        } catch (error) {
++          box.checked = !isCompleted;
++          refresh();
++          say('Could not save: ' + error.message, true);
++        } finally {
++          box.disabled = false;
++        }
++      });
++
++      refresh();
++    })();
++  </script>
++
++<?php endif; ?>

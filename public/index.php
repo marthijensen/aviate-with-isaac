@@ -12,6 +12,9 @@ if (PHP_SAPI === 'cli-server') {
     }
 }
 
+// Bootstrap loads dependencies and application environment
 require_once dirname(__DIR__) . '/src/bootstrap.php';
 
-app_router()->dispatch($_SERVER['REQUEST_METHOD'] ?? 'GET', $_SERVER['REQUEST_URI'] ?? '/');
+$uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+
+app_router()->dispatch($_SERVER['REQUEST_METHOD'] ?? 'GET', $uri);

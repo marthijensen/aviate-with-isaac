@@ -1,10 +1,9 @@
 <?php
-
 declare(strict_types=1);
-
 /**
  * Application routes.
  */
+
 function app_router(): Router
 {
     $router = new Router();
@@ -81,8 +80,6 @@ function app_router(): Router
         ]);
     });
 
-
-
     $router->get('/students', static function (): void {
         $students = null;
 
@@ -118,7 +115,261 @@ function app_router(): Router
         ]);
     });
 
-
+// ---------------------------------------------------------------------
+    // Student training progress checklist
+    //
+    // Two pages show the same checklist and share one save endpoint:
+    //   GET  /students/trainingprogress?id=   (views/trainingprogress.php)
+    //   GET  /students/student-progress?id=   (views/student-progress.php)
+    //   POST /students/trainingprogress  and  /students/student-progress
+    //        create/update student_progress records (one or several items per request)
+    //
+    // Reads course_topics and students; writes only to student_progress.
+    // ---------------------------------------------------------------------
+ 
+    // Saving is allowed on this computer when AVIATE_LOCAL_WRITES=1 (same rule as the other
+    // write routes), or from any computer when AVIATE_DEMO_WRITES=1 (showcase only; the app
+    // has no login yet, so turn it off afterwards).
+    $progressWritesEnabled = static function (): bool {
+        if (Env::get('AVIATE_DEMO_WRITES', '0') === '1') {
+            return true;
+        }
+ 
+        $remoteAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+ 
+        return Env::get('AVIATE_LOCAL_WRITES', '0') === '1'
+            && in_array($remoteAddress, ['127.0.0.1', '::1'], true);
+    };
+ 
+    // Builds the GET handler for a checklist page that renders the given view.
+    $progressPage = static function (string $view) use ($progressWritesEnabled): callable {
+        return static function () use ($view, $progressWritesEnabled): void {
+            if (session_status() !== PHP_SESSION_ACTIVE) {
+                session_start();
+            }
+ 
+            if (empty($_SESSION['progress_csrf'])) {
+                $_SESSION['progress_csrf'] = bin2hex(random_bytes(32));
+            }
+ 
+            $selectedStudent = null;
+            $topics = [];
+            $completed = [];
+            $error = null;
+            $progressLoadFailed = false;
+ 
+            $id = $_GET['id'] ?? ($_GET['student_id'] ?? null);
+            $studentId = (is_string($id) && ctype_digit($id)) ? (int) $id : 0;
+ 
+            if ($studentId < 1) {
+                http_response_code(400);
+                $error = 'A valid student ID is required.';
+            } else {
+                try {
+                    $supabase = supabase();
+ 
+                    $students = $supabase->select('students', [
+                        'select' => 'id,first_name,last_name,status,course_id,training_goal',
+                        'id' => 'eq.' . $studentId,
+                        'limit' => '1',
+                    ]);
+ 
+                    if ($students === []) {
+                        http_response_code(404);
+                        $error = 'Student not found.';
+                    } elseif (($students[0]['course_id'] ?? null) === null) {
+                        http_response_code(404);
+                        $error = 'This student is not enrolled in a course yet.';
+                    } else {
+                        $selectedStudent = $students[0];
+ 
+                        // Only the topics for this student's course.
+                        $topics = $supabase->select('course_topics', [
+                            'select' => 'topic_id,topic,subtopic,display_order,course_id',
+                            'course_id' => 'eq.' . (int) $selectedStudent['course_id'],
+                            'order' => 'display_order.asc,topic_id.asc',
+                            'limit' => '1000',
+                        ]);
+ 
+                        // Only this student's saved progress. If it cannot be read, still show
+                        // the checklist (nothing checked) and say so on the page.
+                        try {
+                            $rows = $supabase->select('student_progress', [
+                                'select' => 'course_topic_id,is_completed',
+                                'student_id' => 'eq.' . $studentId,
+                                'limit' => '1000',
+                            ]);
+ 
+                            foreach ($rows as $row) {
+                                if (!empty($row['is_completed'])) {
+                                    $completed[(int) $row['course_topic_id']] = true;
+                                }
+                            }
+                        } catch (Throwable $exception) {
+                            error_log('Training progress (read): ' . $exception->getMessage());
+                            $progressLoadFailed = true;
+                        }
+                    }
+                } catch (Throwable $exception) {
+                    error_log('Training progress page: ' . $exception->getMessage());
+                    http_response_code(503);
+                    $error = 'Training progress is currently unavailable.';
+                }
+            }
+ 
+            render($view, [
+                'title' => 'Student Progress Checklist',
+                'selectedStudentId' => $studentId,
+                'selectedStudent' => $selectedStudent,
+                'topics' => $topics,
+                'completed' => $completed,
+                'error' => $error,
+                'progressLoadFailed' => $progressLoadFailed,
+                'csrf' => (string) $_SESSION['progress_csrf'],
+                'writesEnabled' => $progressWritesEnabled(),
+            ]);
+        };
+    };
+ 
+    // Saves checked/unchecked items. One request can carry one item (topic_id) or several
+    // (topic_ids, comma separated), for the "mark all" box on a topic.
+    $progressSave = static function () use ($progressWritesEnabled): void {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+ 
+        header('Content-Type: application/json; charset=UTF-8');
+ 
+        $fail = static function (int $status, string $message): void {
+            http_response_code($status);
+            echo json_encode(['success' => false, 'error' => $message]);
+        };
+ 
+        if (!$progressWritesEnabled()) {
+            $fail(403, 'Progress updates are disabled in this environment.');
+            return;
+        }
+ 
+        // Verify the request came from one of our checklist pages.
+        $submittedToken = $_POST['csrf_token'] ?? '';
+        $expectedToken = $_SESSION['progress_csrf'] ?? '';
+ 
+        if (
+            !is_string($submittedToken)
+            || !is_string($expectedToken)
+            || $expectedToken === ''
+            || !hash_equals($expectedToken, $submittedToken)
+        ) {
+            $fail(403, 'Invalid token. Refresh the page and try again.');
+            return;
+        }
+ 
+        $studentId = isset($_POST['student_id']) ? (int) $_POST['student_id'] : 0;
+        $isCompleted = ($_POST['is_completed'] ?? '') === '1';
+ 
+        $rawIds = $_POST['topic_ids'] ?? ($_POST['topic_id'] ?? '');
+        $topicIds = [];
+ 
+        foreach (explode(',', is_string($rawIds) ? $rawIds : '') as $rawId) {
+            $rawId = trim($rawId);
+ 
+            if ($rawId !== '' && ctype_digit($rawId) && (int) $rawId > 0) {
+                $topicIds[(int) $rawId] = (int) $rawId;
+            }
+        }
+ 
+        $topicIds = array_values($topicIds);
+ 
+        if ($studentId < 1 || $topicIds === [] || count($topicIds) > 300) {
+            $fail(422, 'Invalid student or topic ID.');
+            return;
+        }
+ 
+        try {
+            // Every item must belong to the student's own course.
+            $supabase = supabase();
+ 
+            $students = $supabase->select('students', [
+                'select' => 'course_id',
+                'id' => 'eq.' . $studentId,
+                'limit' => '1',
+            ]);
+ 
+            $items = $supabase->select('course_topics', [
+                'select' => 'topic_id,course_id',
+                'topic_id' => 'in.(' . implode(',', $topicIds) . ')',
+                'limit' => '1000',
+            ]);
+ 
+            $courseId = $students[0]['course_id'] ?? null;
+            $valid = $students !== [] && $courseId !== null && count($items) === count($topicIds);
+ 
+            foreach ($items as $item) {
+                if ((int) ($item['course_id'] ?? 0) !== (int) $courseId) {
+                    $valid = false;
+                }
+            }
+ 
+            if (!$valid) {
+                $fail(422, 'That checklist item does not belong to this student\'s course.');
+                return;
+            }
+ 
+            $completedAt = $isCompleted
+                ? (new DateTimeImmutable('now', app_timezone()))->format('Y-m-d H:i:s')
+                : null;
+ 
+            // Strictly use the write credentials for changes to student_progress.
+            $db = WriteDatabase::connect();
+            $db->beginTransaction();
+ 
+            // Edit the student's record for an item if it exists, otherwise create it.
+            // (No unique constraint is required for this.)
+            $update = $db->prepare(
+                'UPDATE public.student_progress
+                SET is_completed = :is_completed, completed_at = :completed_at
+                WHERE student_id = :student_id AND course_topic_id = :topic_id'
+            );
+ 
+            $insert = $db->prepare(
+                'INSERT INTO public.student_progress
+                    (student_id, course_topic_id, is_completed, completed_at)
+                VALUES
+                    (:student_id, :topic_id, :is_completed, :completed_at)'
+            );
+ 
+            foreach ($topicIds as $topicId) {
+                $params = [
+                    'student_id' => $studentId,
+                    'topic_id' => $topicId,
+                    'is_completed' => $isCompleted ? 1 : 0,
+                    'completed_at' => $completedAt,
+                ];
+ 
+                $update->execute($params);
+ 
+                if ($update->rowCount() === 0) {
+                    $insert->execute($params);
+                }
+            }
+ 
+            $db->commit();
+ 
+            echo json_encode(['success' => true]);
+        } catch (Throwable $exception) {
+            if (isset($db) && $db instanceof PDO && $db->inTransaction()) {
+                $db->rollBack();
+            }
+ 
+            error_log('Toggle progress failed: ' . $exception->getMessage());
+            $fail(500, 'Database error while saving progress.');
+        }
+    };
+ 
+    $router->get('/students/trainingprogress', $progressPage('trainingprogress'));
+    $router->get('/students/student-progress', $progressPage('student-progress'));
+    $router->post('/students/trainingprogress', $progressSave);
+    $router->post('/students/student-progress', $progressSave);
 
     $router->get('/students/profile', static function (): void {
         $student = null;

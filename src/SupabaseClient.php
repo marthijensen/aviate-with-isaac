@@ -39,8 +39,9 @@ final class SupabaseClient
         $body = curl_exec($curl);
         $status = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
         $error = curl_error($curl);
-        curl_close($curl);
-
+        if (PHP_VERSION_ID < 80500) {
+            curl_close($curl);
+        }
         if ($body === false) {
             throw new RuntimeException('Could not reach Supabase: ' . $error);
         }
