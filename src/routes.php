@@ -1,10 +1,9 @@
 <?php
-
 declare(strict_types=1);
-
 /**
  * Application routes.
  */
+
 function app_router(): Router
 {
     $router = new Router();
@@ -81,8 +80,6 @@ function app_router(): Router
         ]);
     });
 
-
-
     $router->get('/students', static function (): void {
         $students = null;
 
@@ -118,7 +115,94 @@ function app_router(): Router
         ]);
     });
 
+// student training progress
+    $router->post('/students/student-progress', static function (): void {
+        header('Content-Type: application/json; charset=UTF-8');
 
+        // Permit writes only during explicitly enabled local development (matching your other write routes)
+        $remoteAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+        if (
+            Env::get('AVIATE_LOCAL_WRITES', '0') !== '1'
+            || !in_array($remoteAddress, ['127.0.0.1', '::1'], true)
+        ) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Progress updates are disabled in this environment.']);
+            return;
+        }
+
+        // Extract and validate incoming POST data from the view's JS fetch call
+        $studentId = isset($_POST['student_id']) ? (int) $_POST['student_id'] : 0;
+        $topicId = isset($_POST['topic_id']) ? (int) $_POST['topic_id'] : 0;
+        $isCompleted = isset($_POST['is_completed']) && $_POST['is_completed'] === '1';
+
+        if ($studentId < 1 || $topicId < 1) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'Invalid student or topic ID.']);
+            return;
+        }
+
+        try {
+            // Strictly use write credentials for mutation operations
+            $db = WriteDatabase::connect();
+
+            // Upsert progress record (assumes a unique constraint on student_id + course_topic_id)
+            $statement = $db->prepare(
+                "INSERT INTO public.student_progress (student_id, course_topic_id, is_completed, completed_at)
+                 VALUES (:student_id, :topic_id, :is_completed, :completed_at)
+                 ON CONFLICT (student_id, course_topic_id) 
+                 DO UPDATE SET is_completed = EXCLUDED.is_completed, 
+                               completed_at = EXCLUDED.completed_at"
+            );
+
+            $completedAt = $isCompleted ? (new DateTimeImmutable('now', app_timezone()))->format('Y-m-d H:i:s') : null;
+
+            $statement->execute([
+                'student_id' => $studentId,
+                'topic_id' => $topicId,
+                'is_completed' => $isCompleted ? 1 : 0,
+                'completed_at' => $completedAt,
+            ]);
+
+            echo json_encode(['success' => true]);
+        } catch (Throwable $exception) {
+            error_log('Toggle progress failed: ' . $exception->getMessage());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Database error while saving progress.']);
+        }
+    });
+
+
+// Open student training progress
+    $router->get('/students/progress', static function (): void {
+        $studentId = isset($_GET['id']) ? (int) $_GET['id'] : (isset($_GET['student_id']) ? (int) $_GET['student_id'] : 0);
+        
+        // Initialize your Supabase client (adjust depending on how your container/config provides it)
+        $supabase = new SupabaseClient(Env::get('SUPABASE_URL'), Env::get('SUPABASE_SECRET_KEY'));
+
+        $students = $supabase->select('students', [
+            'select' => 'id,first_name,last_name,status,course_id,training_goal',
+            'order' => 'last_name.asc'
+        ]);
+
+        $byId = [];
+        foreach ($students as $student) {
+            $byId[$student['id']] = $student;
+        }
+        $selectedStudent = $byId[$studentId] ?? null;
+
+        render('student-progress', [
+            'title' => 'Student Progress Checklist',
+            'selectedStudentId' => $studentId,
+            'selectedStudent' => $selectedStudent,
+            'progress' => $supabase->select('student_progress', [
+                'select' => 'student_id,course_topic_id,is_completed,completed_at'
+            ]),
+            'topics' => $supabase->select('course_topics', [
+                'select' => 'topic_id,topic,subtopic,display_order,course_id',
+                'order' => 'display_order.asc,topic_id.asc'
+            ]),
+        ]);
+    });
 
     $router->get('/students/profile', static function (): void {
         $student = null;

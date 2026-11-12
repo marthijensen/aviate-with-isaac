@@ -135,10 +135,10 @@
 
 <section class="fields-grid" style="margin-top: 20px;">
     <article class="progress-card" style="width: 100%;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h2 style="margin: 0;">Progress Tracker</h2>
-            <a href="student-progress.php?id=<?= e((string) ($student['id'] ?? '')) ?>" style="font-weight: 600; text-decoration: none;">View Full Checklist →</a>
-        </div>
+            <a href="progress?id=<?= e((string) ($student['id'] ?? '')) ?>" style="font-weight: 600; text-decoration: none;">View Full Checklist →</a>
+                </div>
         
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
             <div>
