@@ -1,7 +1,17 @@
-<h1>Schedule Lesson</h1>
+<?php
+// Also used by Edit Scheduled Lesson, which overrides these defaults.
+$heading = $heading ?? 'Schedule Lesson';
+$lead = $lead ?? 'Schedule a flight or ground lesson for a student.';
+$formAction = $formAction ?? '/schedule';
+$csrfToken = $csrfToken ?? (string) ($_SESSION['schedule_csrf'] ?? '');
+$submitLabel = $submitLabel ?? 'Schedule Lesson';
+$backHref = $backHref ?? null;
+$hiddenFields = $hiddenFields ?? [];
+?>
+<h1><?= e($heading) ?></h1>
 
 <p class="lead">
-    Schedule a flight or ground lesson for a student.
+    <?= e($lead) ?>
 </p>
 
 <section class="fields-grid">
@@ -37,12 +47,15 @@
             </div>
         <?php endif; ?>
 
-        <form method="post" action="/schedule">
+        <form method="post" action="<?= e($formAction) ?>">
             <input
                 type="hidden"
                 name="csrf_token"
-                value="<?= e((string) ($_SESSION['schedule_csrf'] ?? '')) ?>"
+                value="<?= e($csrfToken) ?>"
             >
+            <?php foreach ($hiddenFields as $hiddenName => $hiddenValue): ?>
+                <input type="hidden" name="<?= e((string) $hiddenName) ?>" value="<?= e((string) $hiddenValue) ?>">
+            <?php endforeach; ?>
 
             <div class="field-grid">
 
@@ -138,8 +151,11 @@
 
                 <div class="span-2 actions">
                     <button type="submit">
-                        Schedule Lesson
+                        <?= e($submitLabel) ?>
                     </button>
+                    <?php if ($backHref !== null): ?>
+                        <a href="<?= e($backHref) ?>">Back to student</a>
+                    <?php endif; ?>
                 </div>
 
             </div>
