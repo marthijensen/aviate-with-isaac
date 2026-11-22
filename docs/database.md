@@ -97,3 +97,10 @@ The `apointment_*` spelling matches the column names in Supabase.
 - Hides cancelled and completed appointments. Appointments with no status are shown.
 - Appointments with no `start_time` stay listed for their whole day, after the timed ones, and show "Time TBD".
 - Sorted by date, then time. Shows up to 10.
+
+## Editing and Cancelling Lessons (Stories 31 and 32)
+
+- **Edit** updates `student_id`, `apointment_date`, `start_time` and `apointment_type` on one `appointments` row.
+- **Cancel** sets `status = 'cancelled'`. The row is kept, so the lesson stays on the student's record, labelled "Cancelled".
+- Both only change rows where `status = 'scheduled'` and the date is today or later. Cancelled, completed and past lessons are left alone.
+- Both write through `WriteDatabase`, so the restricted writer role needs `UPDATE` on `public.appointments` in addition to `INSERT`.

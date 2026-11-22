@@ -189,7 +189,8 @@ function app_router(): Router
 
                             $recentLessons = $recentStatement->fetchAll();
 
-                            // Get the student's next five scheduled appointments.
+                            // Get the student's next five scheduled or cancelled
+                            // appointments, so cancellations stay visible.
                             $upcomingStatement = $db->prepare(
                                 "SELECT
                                     id,
@@ -200,7 +201,7 @@ function app_router(): Router
                                 FROM public.appointments
                                 WHERE student_id = :student_id
                                 AND apointment_date >= :today
-                                AND status = 'scheduled'
+                                AND status IN ('scheduled', 'cancelled', 'canceled')
                                 ORDER BY apointment_date ASC, start_time ASC
                                 LIMIT 5"
                             );
@@ -229,8 +230,16 @@ function app_router(): Router
             }
         }
 
+        // Confirmation shown after a lesson change redirects back here.
+        $notice = match ($_GET['notice'] ?? null) {
+            'lesson-updated' => 'Lesson updated.',
+            'lesson-cancelled' => 'Lesson cancelled.',
+            default => null,
+        };
+
         render('student-profile', [
             'title' => 'Student Profile',
+            'notice' => $notice,
             'student' => $student,
             'error' => $error,
             'recentLessons' => $recentLessons,
@@ -460,15 +469,7 @@ function app_router(): Router
         $studentOptionsError = null;
 
         try {
-            $db = ReadOnlyDatabase::connect();
-
-            $studentOptions = $db->query(
-                "SELECT id, first_name, last_name
-                FROM public.students
-                WHERE status = 'active'
-                ORDER BY last_name ASC, first_name ASC"
-            )->fetchAll();
-
+            $studentOptions = Appointments::studentOptions(ReadOnlyDatabase::connect());
         } catch (Throwable $exception) {
             error_log('Schedule students: ' . $exception->getMessage());
             $studentOptionsError = 'Student list could not be loaded.';
@@ -478,16 +479,7 @@ function app_router(): Router
         $lessonOptionsError = null;
 
         try {
-            $db = ReadOnlyDatabase::connect();
-
-            $lessonOptions = $db->query(
-                "SELECT DISTINCT TRIM(lesson_type) AS lesson_type
-                FROM public.lessons
-                WHERE lesson_type IS NOT NULL
-                AND TRIM(lesson_type) <> ''
-                ORDER BY lesson_type ASC"
-            )->fetchAll(PDO::FETCH_COLUMN);
-
+            $lessonOptions = Appointments::lessonTypes(ReadOnlyDatabase::connect());
         } catch (Throwable $exception) {
             error_log('Schedule lesson types: ' . $exception->getMessage());
             $lessonOptionsError = 'Lesson types could not be loaded.';
@@ -538,115 +530,15 @@ function app_router(): Router
             return;
         }
 
-        $names = [
-            'student_id',
-            'lesson_type',
-            'appointment_date',
-            'start_time',
-        ];
+        $fields = Appointments::readForm($_POST);
 
-        $fields = [];
-
-        foreach ($names as $name) {
-            $value = $_POST[$name] ?? '';
-            $fields[$name] = is_string($value) ? trim($value) : '';
-        }
-
-        $errors = [];
-
-        // Validate the student ID.
-        if (!ctype_digit($fields['student_id'])
-            || (int) $fields['student_id'] < 1) {
-            $errors[] = 'A valid student ID is required.';
-        }
-
-        // Validate the lesson type.
-        if ($fields['lesson_type'] === '') {
-            $errors[] = 'Please select a lesson type.';
-        }
-
-        // Validate the appointment date.
-        $date = DateTimeImmutable::createFromFormat(
-            '!Y-m-d',
-            $fields['appointment_date'],
-            app_timezone()
-        );
-
-        if ($date === false ||
-            $date->format('Y-m-d') !== $fields['appointment_date']) {
-            $errors[] = 'Please enter a valid appointment date.';
-        } elseif ($date < new DateTimeImmutable('today', app_timezone())) {
-            $errors[] = 'The appointment date cannot be in the past.';
-        }
-
-        // Validate the appointment time.
-        if (!preg_match(
-            '/^([01]\d|2[0-3]):[0-5]\d$/',
-            $fields['start_time']
-        )) {
-            $errors[] = 'Please enter a valid start time.';
-        }
-
-        $studentOptions = [];
-        $studentOptionsError = null;
-
-        try {
-            $db = ReadOnlyDatabase::connect();
-
-            $studentOptions = $db->query(
-                "SELECT id, first_name, last_name
-                FROM public.students
-                WHERE status = 'active'
-                ORDER BY last_name ASC, first_name ASC"
-            )->fetchAll();
-
-            // Verify the selected student is actually active.
-            if (ctype_digit($fields['student_id'])
-                && (int) $fields['student_id'] > 0) {
-
-                $validIds = array_map(
-                    static fn (array $student): string =>
-                        (string) $student['id'],
-                    $studentOptions
-                );
-
-                if (!in_array($fields['student_id'], $validIds, true)) {
-                    $errors[] = 'Please select an active student.';
-                }
-            }
-
-        } catch (Throwable $exception) {
-            error_log('Schedule students: ' . $exception->getMessage());
-
-            $studentOptionsError = 'Student list could not be loaded.';
-            $errors[] = 'Student selection could not be verified.';
-        }
-
-
-        $lessonOptions = [];
-        $lessonOptionsError = null;
-
-        try {
-            $db = ReadOnlyDatabase::connect();
-
-            $lessonOptions = $db->query(
-                "SELECT DISTINCT TRIM(lesson_type) AS lesson_type
-                FROM public.lessons
-                WHERE lesson_type IS NOT NULL
-                AND TRIM(lesson_type) <> ''
-                ORDER BY lesson_type ASC"
-            )->fetchAll(PDO::FETCH_COLUMN);
-
-            if ($fields['lesson_type'] !== ''
-                && !in_array($fields['lesson_type'], $lessonOptions, true)) {
-                $errors[] = 'Please select a valid lesson type.';
-            }
-
-        } catch (Throwable $exception) {
-            error_log('Schedule lesson types: ' . $exception->getMessage());
-            $lessonOptionsError = 'Lesson types could not be loaded.';
-            $errors[] = 'Lesson type could not be verified.';
-        }
+        [
+            'errors' => $errors,
+            'studentOptions' => $studentOptions,
+            'studentOptionsError' => $studentOptionsError,
+            'lessonOptions' => $lessonOptions,
+            'lessonOptionsError' => $lessonOptionsError,
+        ] = check_lesson_form($fields);
 
         if ($studentOptionsError !== null || $lessonOptionsError !== null) {
             http_response_code(503);
@@ -725,6 +617,124 @@ function app_router(): Router
     });
 
 
+    // Display the Edit Scheduled Lesson form.
+    $router->get('/appointments/edit', static function (): void {
+        $id = positive_id($_GET, 'id');
+        $appointment = load_changeable_lesson($id, 'Edit Lesson');
+
+        if ($appointment === null) {
+            return;
+        }
+
+        $fields = [
+            'student_id' => (string) $appointment['student_id'],
+            'lesson_type' => trim((string) $appointment['apointment_type']),
+            'appointment_date' => (string) $appointment['apointment_date'],
+            'start_time' => Appointments::timeInputValue($appointment['start_time']),
+        ];
+
+        $options = check_lesson_form($fields, (int) $appointment['student_id']);
+
+        render_edit_lesson_form($id, $fields, [], $options);
+    });
+
+    // Save changes to a scheduled lesson.
+    $router->post('/appointments/edit', static function (): void {
+        if (!require_local_writes('Lesson editing is disabled in this environment.')
+            || !require_csrf('edit_lesson_csrf')) {
+            return;
+        }
+
+        $id = positive_id($_POST, 'appointment_id');
+        $appointment = load_changeable_lesson($id, 'Edit Lesson');
+
+        if ($appointment === null) {
+            return;
+        }
+
+        $fields = Appointments::readForm($_POST);
+        $check = check_lesson_form($fields, (int) $appointment['student_id']);
+        $errors = $check['errors'];
+
+        if ($check['studentOptionsError'] !== null || $check['lessonOptionsError'] !== null) {
+            http_response_code(503);
+        } elseif ($errors !== []) {
+            http_response_code(422);
+        } else {
+            try {
+                if (!Appointments::update(WriteDatabase::connect(), $id, $fields)) {
+                    http_response_code(409);
+                    render_lesson_notice('Edit Lesson', 'This lesson was cancelled or changed by someone else. Reload the student\'s profile and try again.', (int) $appointment['student_id']);
+                    return;
+                }
+
+                // Open the student's profile after saving.
+                redirect('/students/profile?id=' . (int) $fields['student_id'] . '&notice=lesson-updated', 303);
+                return;
+
+            } catch (Throwable $exception) {
+                error_log('Edit lesson UPDATE failed: ' . $exception->getMessage());
+                $errors[] = 'Lesson could not be saved. Please try again.';
+                http_response_code(500);
+            }
+        }
+
+        render_edit_lesson_form($id, $fields, $errors, $check);
+    });
+
+    // Ask for confirmation before cancelling a scheduled lesson.
+    $router->get('/appointments/cancel', static function (): void {
+        $appointment = load_changeable_lesson(positive_id($_GET, 'id'), 'Cancel Lesson');
+
+        if ($appointment === null) {
+            return;
+        }
+
+        render('cancel-lesson', [
+            'title' => 'Cancel Lesson',
+            'appointment' => $appointment,
+            'csrfToken' => csrf_token('cancel_lesson_csrf'),
+            'errors' => [],
+        ]);
+    });
+
+    // Mark a scheduled lesson as cancelled.
+    $router->post('/appointments/cancel', static function (): void {
+        if (!require_local_writes('Lesson cancellation is disabled in this environment.')
+            || !require_csrf('cancel_lesson_csrf')) {
+            return;
+        }
+
+        $id = positive_id($_POST, 'appointment_id');
+        $appointment = load_changeable_lesson($id, 'Cancel Lesson');
+
+        if ($appointment === null) {
+            return;
+        }
+
+        try {
+            if (!Appointments::cancel(WriteDatabase::connect(), $id)) {
+                http_response_code(409);
+                render_lesson_notice('Cancel Lesson', 'This lesson was already cancelled or changed. Reload the student\'s profile to see its current status.', (int) $appointment['student_id']);
+                return;
+            }
+
+            redirect('/students/profile?id=' . (int) $appointment['student_id'] . '&notice=lesson-cancelled', 303);
+            return;
+
+        } catch (Throwable $exception) {
+            error_log('Cancel lesson UPDATE failed: ' . $exception->getMessage());
+            http_response_code(500);
+        }
+
+        render('cancel-lesson', [
+            'title' => 'Cancel Lesson',
+            'appointment' => $appointment,
+            'csrfToken' => csrf_token('cancel_lesson_csrf'),
+            'errors' => ['Lesson could not be cancelled. Please try again.'],
+        ]);
+    });
+
     $router->get('/financials', static function (): void {
         render('financials', [
             'title' => 'Financial Dashboard',
@@ -732,4 +742,140 @@ function app_router(): Router
     });
 
     return $router;
+}
+
+/**
+ * Validates the schedule / edit lesson form and loads the student and lesson
+ * type options it needs. $includeStudentId keeps a lesson's current student
+ * valid when editing, even if they are no longer active.
+ *
+ * @param array<string, string> $fields
+ * @return array{errors: list<string>, studentOptions: array, studentOptionsError: ?string, lessonOptions: list<string>, lessonOptionsError: ?string}
+ */
+function check_lesson_form(array $fields, ?int $includeStudentId = null): array
+{
+    $errors = Appointments::validate($fields, app_timezone());
+
+    $studentOptions = [];
+    $studentOptionsError = null;
+
+    try {
+        $studentOptions = Appointments::studentOptions(ReadOnlyDatabase::connect(), $includeStudentId);
+
+        // Verify the selected student is one of the options.
+        if (ctype_digit($fields['student_id']) && (int) $fields['student_id'] > 0) {
+            $validIds = array_map(static fn (array $student): string => (string) $student['id'], $studentOptions);
+
+            if (!in_array($fields['student_id'], $validIds, true)) {
+                $errors[] = 'Please select an active student.';
+            }
+        }
+    } catch (Throwable $exception) {
+        error_log('Lesson form students: ' . $exception->getMessage());
+        $studentOptionsError = 'Student list could not be loaded.';
+        $errors[] = 'Student selection could not be verified.';
+    }
+
+    $lessonOptions = [];
+    $lessonOptionsError = null;
+
+    try {
+        $lessonOptions = Appointments::lessonTypes(ReadOnlyDatabase::connect());
+
+        if ($fields['lesson_type'] !== '' && !in_array($fields['lesson_type'], $lessonOptions, true)) {
+            $errors[] = 'Please select a valid lesson type.';
+        }
+    } catch (Throwable $exception) {
+        error_log('Lesson form lesson types: ' . $exception->getMessage());
+        $lessonOptionsError = 'Lesson types could not be loaded.';
+        $errors[] = 'Lesson type could not be verified.';
+    }
+
+    return [
+        'errors' => $errors,
+        'studentOptions' => $studentOptions,
+        'studentOptionsError' => $studentOptionsError,
+        'lessonOptions' => $lessonOptions,
+        'lessonOptionsError' => $lessonOptionsError,
+    ];
+}
+
+/**
+ * Renders the schedule form in edit mode for an existing lesson.
+ *
+ * @param array<string, string> $fields
+ * @param list<string> $errors
+ * @param array{studentOptions: array, studentOptionsError: ?string, lessonOptions: list<string>, lessonOptionsError: ?string} $options
+ */
+function render_edit_lesson_form(int $id, array $fields, array $errors, array $options): void
+{
+    render('schedule', [
+        'title' => 'Edit Lesson',
+        'heading' => 'Edit Lesson',
+        'lead' => 'Change the student, lesson type, date, or time for this lesson.',
+        'formAction' => '/appointments/edit',
+        'csrfToken' => csrf_token('edit_lesson_csrf'),
+        'submitLabel' => 'Save Changes',
+        'backHref' => '/students/profile?id=' . (int) $fields['student_id'],
+        'hiddenFields' => ['appointment_id' => $id],
+        'fields' => $fields,
+        'errors' => $errors,
+        'preview' => false,
+        'studentOptions' => $options['studentOptions'],
+        'studentOptionsError' => $options['studentOptionsError'],
+        'lessonOptions' => $options['lessonOptions'],
+        'lessonOptionsError' => $options['lessonOptionsError'],
+    ]);
+}
+
+/**
+ * Loads a lesson that is about to be edited or cancelled. If it's missing,
+ * can't be loaded, or can no longer be changed, renders a message page with
+ * the right status code and returns null.
+ *
+ * @return array<string, mixed>|null
+ */
+function load_changeable_lesson(?int $id, string $title): ?array
+{
+    if ($id === null) {
+        http_response_code(400);
+        render_lesson_notice($title, 'A valid lesson ID is required.');
+        return null;
+    }
+
+    try {
+        $appointment = Appointments::find(ReadOnlyDatabase::connect(), $id);
+    } catch (Throwable $exception) {
+        error_log($title . ' load: ' . $exception->getMessage());
+        http_response_code(503);
+        render_lesson_notice($title, 'This lesson could not be loaded. Please try again later.');
+        return null;
+    }
+
+    if ($appointment === null) {
+        http_response_code(404);
+        render_lesson_notice($title, 'Lesson not found.');
+        return null;
+    }
+
+    $lockedReason = Appointments::lockedReason($appointment, app_timezone());
+
+    if ($lockedReason !== null) {
+        http_response_code(409);
+        render_lesson_notice($title, $lockedReason, (int) $appointment['student_id']);
+        return null;
+    }
+
+    return $appointment;
+}
+
+/** Renders a short message page for lesson actions that can't continue. */
+function render_lesson_notice(string $title, string $message, ?int $studentId = null): void
+{
+    render('lesson-notice', [
+        'title' => $title,
+        'message' => $message,
+        'backHref' => $studentId !== null ? '/students/profile?id=' . $studentId : '/dashboard',
+        'backLabel' => $studentId !== null ? 'Back to student' : 'Back to dashboard',
+    ]);
 }

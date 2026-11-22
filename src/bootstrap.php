@@ -7,6 +7,7 @@ require_once __DIR__ . '/ReadOnlyDatabase.php';
 require_once __DIR__ . '/WriteDatabase.php';
 require_once __DIR__ . '/SupabaseClient.php';
 require_once __DIR__ . '/UpcomingLessons.php';
+require_once __DIR__ . '/Appointments.php';
 require_once __DIR__ . '/Router.php';
 require_once __DIR__ . '/routes.php';
 
@@ -55,6 +56,70 @@ function render(string $view, array $data = []): void
 function redirect(string $path, int $status = 302): void
 {
     header('Location: ' . $path, true, $status);
+}
+
+/**
+ * Database writes are only allowed during explicitly enabled local testing,
+ * from the local machine. Sends a 403 and returns false otherwise.
+ */
+function require_local_writes(string $message): bool
+{
+    $remoteAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+
+    if (
+        Env::get('AVIATE_LOCAL_WRITES', '0') !== '1'
+        || !in_array($remoteAddress, ['127.0.0.1', '::1'], true)
+    ) {
+        http_response_code(403);
+        echo $message;
+        return false;
+    }
+
+    return true;
+}
+
+/** Returns the session's CSRF token for a form, creating it if needed. */
+function csrf_token(string $form): string
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    if (empty($_SESSION[$form])) {
+        $_SESSION[$form] = bin2hex(random_bytes(32));
+    }
+
+    return $_SESSION[$form];
+}
+
+/**
+ * Checks the posted csrf_token against the session's token for a form.
+ * Sends a 403 and returns false if it doesn't match.
+ */
+function require_csrf(string $form): bool
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    $submitted = $_POST['csrf_token'] ?? '';
+    $expected = $_SESSION[$form] ?? '';
+
+    if (!is_string($submitted) || !is_string($expected) || $expected === '' || !hash_equals($expected, $submitted)) {
+        http_response_code(403);
+        echo 'Invalid form token. Refresh the page and try again.';
+        return false;
+    }
+
+    return true;
+}
+
+/** Reads a positive integer ID from a request array, or null. */
+function positive_id(array $source, string $key): ?int
+{
+    $value = $source[$key] ?? null;
+
+    return is_string($value) && ctype_digit($value) && (int) $value > 0 ? (int) $value : null;
 }
 
 function supabase(): SupabaseClient

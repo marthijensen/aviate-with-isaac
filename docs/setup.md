@@ -57,6 +57,8 @@ Every request goes through `public/index.php`, the front controller. Routes are 
 | --- | --- | --- |
 | GET | `/` | Redirects to `/dashboard` |
 | GET | `/dashboard` | Dashboard with upcoming lessons |
+| GET, POST | `/appointments/edit` | Edit a scheduled lesson (`?id=` on GET, `appointment_id` on POST) |
+| GET, POST | `/appointments/cancel` | Confirm, then cancel a scheduled lesson (`?id=` on GET, `appointment_id` on POST) |
 
 Unknown paths show a 404 page. Pages are views in `views/`, rendered inside `views/layout.php`.
 

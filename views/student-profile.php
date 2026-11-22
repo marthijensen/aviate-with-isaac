@@ -9,6 +9,10 @@
     <a href="/students">← Back to Students</a>
 </p>
 
+<?php if (!empty($notice)): ?>
+    <p class="action-note" role="status"><?= e($notice) ?></p>
+<?php endif; ?>
+
 <?php if ($error !== null): ?>
 
     <section class="fields-grid">
@@ -86,7 +90,12 @@
                         </span>
 
                         <span class="when">
-                            <?= e((string) ($lesson['status'] ?? 'Unknown')) ?>
+                            <?php $statusLabel = Appointments::statusLabel($lesson['status'] ?? null); ?>
+                            <?php if ($statusLabel === 'Cancelled'): ?>
+                                <em class="warn">Cancelled</em>
+                            <?php else: ?>
+                                <?= e($statusLabel) ?>
+                            <?php endif; ?>
                         </span>
                     </li>
                 <?php endforeach; ?>
@@ -123,6 +132,15 @@
 
                         <span class="when">
                             <?= e((string) ($appointment['start_time'] ?? 'Time TBD')) ?>
+                            <?php if (Appointments::statusLabel($appointment['status'] ?? null) === 'Cancelled'): ?>
+                                <small><em class="warn">Cancelled</em></small>
+                            <?php elseif (isset($appointment['id'])): ?>
+                                <small>
+                                    <a href="/appointments/edit?id=<?= e((string) $appointment['id']) ?>">Edit</a>
+                                    &middot;
+                                    <a href="/appointments/cancel?id=<?= e((string) $appointment['id']) ?>">Cancel</a>
+                                </small>
+                            <?php endif; ?>
                         </span>
                     </li>
                 <?php endforeach; ?>
