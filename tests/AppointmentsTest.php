@@ -121,6 +121,62 @@ add_appointment($db, 12, 1, $tomorrow);
 Appointments::update($db, 12, $validForm);
 check(Appointments::find($db, 10)['start_time'] === '14:30' && (int) Appointments::find($db, 12)['student_id'] === 2, 'update only changes the selected lesson');
 
+// --- Cancel ---
+
+add_appointment($db, 20, 1, $tomorrow);
+check(Appointments::cancel($db, 20), 'cancel marks a scheduled lesson');
+$cancelled = Appointments::find($db, 20);
+check($cancelled !== null && $cancelled['status'] === 'cancelled', 'cancelled lesson is kept with status "cancelled"');
+check(!Appointments::cancel($db, 20), 'cancelling twice is refused');
+check(Appointments::lockedReason($cancelled, $zone) === 'This lesson has been cancelled.', 'cancelled lesson can no longer be edited');
+
+add_appointment($db, 21, 1, $tomorrow, 'completed');
+check(!Appointments::cancel($db, 21) && Appointments::find($db, 21)['status'] === 'completed', 'completed lesson is not cancelled');
+check(!Appointments::cancel($db, 999), 'cancel reports a missing lesson');
+
+// A cancelled lesson must never count as upcoming or completed.
+$upcoming = UpcomingLessons::prepare([$cancelled], [], new DateTimeImmutable('now', $zone), $zone);
+check($upcoming === [], 'cancelled lesson is not on the dashboard');
+check(Appointments::statusLabel('cancelled') === 'Cancelled' && Appointments::statusLabel('canceled') === 'Cancelled', 'both spellings show as "Cancelled"');
+check(Appointments::statusLabel('completed') === 'Completed' && Appointments::statusLabel(null) === 'Scheduled', 'other statuses get readable labels');
+
+// --- Views ---
+
+function render_view(string $view, array $vars): string
+{
+    extract($vars);
+    ob_start();
+    require dirname(__DIR__) . "/views/{$view}.php";
+    return (string) ob_get_clean();
+}
+
+$profileVars = [
+    'notice' => 'Lesson cancelled.',
+    'error' => null,
+    'student' => ['id' => 1, 'first_name' => 'Ava', 'last_name' => 'Lee'],
+    'appointmentsError' => null,
+    'recentLessons' => [['apointment_date' => $yesterday, 'apointment_type' => 'Flight', 'status' => 'canceled']],
+    'upcomingAppointments' => [
+        ['id' => 30, 'apointment_date' => $tomorrow, 'start_time' => '09:00:00', 'apointment_type' => 'Flight', 'status' => 'scheduled'],
+        ['id' => 31, 'apointment_date' => $tomorrow, 'start_time' => '11:00:00', 'apointment_type' => 'Ground', 'status' => 'cancelled'],
+    ],
+];
+$html = render_view('student-profile', $profileVars);
+check(str_contains($html, 'Lesson cancelled.'), 'profile shows the cancellation confirmation');
+check(str_contains($html, '/appointments/edit?id=30') && str_contains($html, '/appointments/cancel?id=30'), 'scheduled lesson has Edit and Cancel links');
+check(!str_contains($html, '/appointments/edit?id=31') && !str_contains($html, '/appointments/cancel?id=31'), 'cancelled lesson has no Edit or Cancel links');
+check(substr_count($html, '<em class="warn">Cancelled</em>') === 2, 'cancelled lessons are labelled "Cancelled" in both lists');
+check(!str_contains($html, 'Completed'), 'cancelled lesson is not shown as completed');
+
+$html = render_view('cancel-lesson', [
+    'appointment' => ['id' => 30, 'student_id' => 1, 'first_name' => 'Ava', 'last_name' => 'Lee', 'apointment_date' => '2026-12-01', 'start_time' => '14:30:00', 'apointment_type' => 'Flight'],
+    'csrfToken' => 'token-123',
+    'errors' => [],
+]);
+check(str_contains($html, 'Ava Lee') && str_contains($html, '2:30 PM') && str_contains($html, 'Tue 12/1/2026'), 'confirmation page shows the lesson details');
+check(str_contains($html, 'name="appointment_id" value="30"') && str_contains($html, 'value="token-123"'), 'confirmation form posts the lesson ID and token');
+check(str_contains($html, 'href="/students/profile?id=1">Keep Lesson'), 'Keep Lesson returns to the student');
+
 // --- Display helpers ---
 
 check(Appointments::timeInputValue('14:30:00') === '14:30', 'Postgres time converts to a time input value');
