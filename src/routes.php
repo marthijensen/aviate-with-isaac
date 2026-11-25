@@ -8,6 +8,8 @@ declare(strict_types=1);
 function app_router(): Router
 {
     $router = new Router();
+    require_once __DIR__ . '/StudentProgress.php';
+    register_student_progress_routes($router);
 
     $router->get('/', static function (): void {
         redirect('/dashboard');
