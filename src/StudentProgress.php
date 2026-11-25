@@ -43,7 +43,7 @@ function register_student_progress_routes(Router $router): void
             try {
                 $db = ReadOnlyDatabase::connect();
                 $statement = $db->prepare(
-                    'SELECT id, first_name, last_name, course_id, training_goal
+                    'SELECT id, first_name, last_name, training_goal
                      FROM public.students WHERE id = :student_id'
                 );
                 $statement->execute(['student_id' => $studentId]);
@@ -52,13 +52,13 @@ function register_student_progress_routes(Router $router): void
                 if ($student === null) {
                     http_response_code(404);
                     $error = 'Student not found.';
-                } elseif ($student['course_id'] !== null) {
+                } else {
                     $statement = $db->prepare(
-                        'SELECT topic_id, topic, subtopic, display_order, course_id
-                         FROM public.course_topics WHERE course_id = :course_id
+                        'SELECT topic_id, topic, subtopic, display_order
+                         FROM public.course_topics
                          ORDER BY display_order ASC, topic_id ASC'
                     );
-                    $statement->execute(['course_id' => $student['course_id']]);
+                    $statement->execute();
                     $topics = $statement->fetchAll();
 
                     $statement = $db->prepare(
@@ -66,11 +66,10 @@ function register_student_progress_routes(Router $router): void
                                 CASE WHEN p.is_completed THEN 1 ELSE 0 END AS is_completed
                          FROM public.student_progress p
                          JOIN public.course_topics t ON t.topic_id = p.course_topic_id
-                         WHERE p.student_id = :student_id AND t.course_id = :course_id'
+                         WHERE p.student_id = :student_id'
                     );
                     $statement->execute([
                         'student_id' => $studentId,
-                        'course_id' => $student['course_id'],
                     ]);
                     $progress = $statement->fetchAll();
                 }
@@ -132,14 +131,14 @@ function register_student_progress_routes(Router $router): void
 
         try {
             $db = WriteDatabase::connect();
-            // Validate the student/course/topic relationship within the write itself.
-            // A mismatch inserts zero rows and cannot update another course's progress.
+            // Any existing topic is valid for any existing student.
+            // Keep progress separate by student and topic; missing IDs insert zero rows.
             $statement = $db->prepare(
                 'INSERT INTO public.student_progress (student_id, course_topic_id, is_completed, completed_at)
                  SELECT s.id, t.topic_id, CAST(:completed AS boolean),
                         CASE WHEN CAST(:timestamp_flag AS boolean) THEN CURRENT_TIMESTAMP ELSE NULL END
                  FROM public.students s
-                 JOIN public.course_topics t ON t.course_id = s.course_id
+                 CROSS JOIN public.course_topics t
                  WHERE s.id = :student_id AND t.topic_id = :topic_id
                  ON CONFLICT (student_id, course_topic_id)
                  DO UPDATE SET is_completed = EXCLUDED.is_completed,
@@ -153,7 +152,7 @@ function register_student_progress_routes(Router $router): void
                 'timestamp_flag' => $flag,
             ]);
             if ($statement->rowCount() !== 1) {
-                progress_json(422, ['success' => false, 'error' => 'Student or topic not found for this course.']);
+                progress_json(422, ['success' => false, 'error' => 'Student or topic not found.']);
                 return;
             }
             progress_json(200, ['success' => true]);
