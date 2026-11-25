@@ -9,6 +9,10 @@
     <a href="/students">← Back to Students</a>
 </p>
 
+<?php if (!empty($notice)): ?>
+    <p class="action-note" role="status"><?= e($notice) ?></p>
+<?php endif; ?>
+
 <?php if ($error !== null): ?>
 
     <section class="fields-grid">
@@ -123,6 +127,11 @@
 
                         <span class="when">
                             <?= e((string) ($appointment['start_time'] ?? 'Time TBD')) ?>
+                            <?php if (isset($appointment['id'])): ?>
+                                <small>
+                                    <a href="/appointments/edit?id=<?= e((string) $appointment['id']) ?>">Edit</a>
+                                </small>
+                            <?php endif; ?>
                         </span>
                     </li>
                 <?php endforeach; ?>
