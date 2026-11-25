@@ -22,8 +22,7 @@ foreach ($topics as $topic) {
     $groupedTopics[$topicName][] = $topic;
 }
 
-$trainingGoal = trim($selectedStudent['training_goal'] ?? '');
-$courseTitle = $trainingGoal !== '' ? $trainingGoal . ' Topics' : 'Course Topics';
+$courseTitle = 'Training Topics';
 ?>
 
 <p><a href="<?= $selectedStudent ? '/students/profile?id=' . (int) $selectedStudentId : '/students' ?>">← Back</a></p>
@@ -78,7 +77,7 @@ $courseTitle = $trainingGoal !== '' ? $trainingGoal . ' Topics' : 'Course Topics
           </li>
         <?php endforeach; ?>
       <?php else: ?>
-        <li><span>No topics found for this student's course.</span></li>
+        <li><span>No training topics found.</span></li>
       <?php endif; ?>
       </ul>
     </article>
