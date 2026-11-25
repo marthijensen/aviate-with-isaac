@@ -97,3 +97,50 @@ The `apointment_*` spelling matches the column names in Supabase.
 - Hides cancelled and completed appointments. Appointments with no status are shown.
 - Appointments with no `start_time` stay listed for their whole day, after the timed ones, and show "Time TBD".
 - Sorted by date, then time. Shows up to 10.
+
+## Student Progress Checklist (PR #13 / #16)
+
+The shared checklist displays all rows in `public.course_topics` for every student, regardless of their assigned course. Completion is stored independently by `student_id` and `course_topic_id` in `public.student_progress`. Checking a task records a completion timestamp; unchecking sets `is_completed` to false and clears that timestamp. The upsert requires a unique constraint or suitable unique index on the student/topic pair.
+
+### Restricted database roles
+
+During local integration testing on November 24, 2026, the team configured the following permissions and role-specific RLS policies on the shared Supabase database. The SQL below records the setup used during troubleshooting; it is not an automatically executed migration. Review existing policies and grants before applying to another environment. Policy creation is not idempotent.
+
+```sql
+GRANT SELECT ON public.course_topics, public.student_progress TO readonly_user;
+
+CREATE POLICY "readonly_user_read_course_topics"
+ON public.course_topics FOR SELECT TO readonly_user USING (true);
+
+CREATE POLICY "readonly_user_read_student_progress"
+ON public.student_progress FOR SELECT TO readonly_user USING (true);
+
+GRANT SELECT, INSERT ON public.student_progress TO aviate_writer;
+GRANT UPDATE (is_completed, completed_at)
+ON public.student_progress TO aviate_writer;
+GRANT SELECT ON public.course_topics TO aviate_writer;
+GRANT SELECT (id) ON public.students TO aviate_writer;
+GRANT USAGE ON SEQUENCE public.student_progress_progress_id_seq TO aviate_writer;
+
+CREATE POLICY "aviate_writer_read_topics"
+ON public.course_topics FOR SELECT TO aviate_writer USING (true);
+
+CREATE POLICY "aviate_writer_read_progress"
+ON public.student_progress FOR SELECT TO aviate_writer USING (true);
+
+CREATE POLICY "aviate_writer_insert_progress"
+ON public.student_progress FOR INSERT TO aviate_writer WITH CHECK (true);
+
+CREATE POLICY "aviate_writer_update_progress"
+ON public.student_progress FOR UPDATE TO aviate_writer
+USING (true) WITH CHECK (true);
+
+CREATE POLICY "aviate_writer_read_student_ids"
+ON public.students FOR SELECT TO aviate_writer USING (true);
+```
+
+These policies are for the dedicated server-side roles, not anonymous or authenticated public API clients. They permit access across students for the current internal development model. RLS remains enabled on the checklist tables; the writer only requires the student ID for existence validation. Keep credentials server-side and never commit them. Writes remain gated by `AVIATE_LOCAL_WRITES=1`, loopback address, and CSRF validation. Before any public deployment, implement appropriate per-user authentication and authorization and review role permissions.
+
+### Verification
+
+Manual testing confirmed that the universal checklist displays, checking and unchecking save to Supabase, completion timestamps are set/cleared appropriately, and progress persists across refreshes and PHP restarts. The saved rows were independently inspected in Supabase SQL Editor. Offline regression tests are provided in `tests/StudentProgressTest.php`; run those and the existing test suite before deployment. The student-profile aggregate counters remain placeholders outside this PR.
